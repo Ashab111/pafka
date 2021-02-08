@@ -281,6 +281,13 @@ object Defaults {
   val QuorumLingerMs = RaftConfig.DEFAULT_QUORUM_LINGER_MS
   val QuorumRequestTimeoutMs = RaftConfig.DEFAULT_QUORUM_REQUEST_TIMEOUT_MS
   val QuorumRetryBackoffMs = RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS
+
+  /** ********* PMem storage Configuration **************/
+  val UsePMemStorage = false
+  val PmemPath = "/tmp/pmem"
+  val PmemLogPoolSize = 10
+  val PmemSize = 1024L * 1024 * 1024 * 20
+  val LogChannelType = "file"
 }
 
 object KafkaConfig {
@@ -597,6 +604,13 @@ object KafkaConfig {
   val PasswordEncoderCipherAlgorithmProp = "password.encoder.cipher.algorithm"
   val PasswordEncoderKeyLengthProp =  "password.encoder.key.length"
   val PasswordEncoderIterationsProp =  "password.encoder.iterations"
+
+  /** ********* pmem-related configs *********/
+  val UsePMemStorageProp = "storage.pmem"
+  val PMemPathProp = "storage.pmem.path"
+  val PMemLogPoolSizeProp = "storage.pmem.log.pool"
+  val PMemSizeProp = "storage.pmem.size"
+  val LogChannelTypeProp = "log.channel.type"
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -1026,7 +1040,14 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
-  private[server] val configDef = {
+   /** ********* PMmem storage config *********/
+   val UsePMemStorageDoc = "Whether use PMem as the log storage"
+   val PMemPathDoc = s"PMem device mount location. Only used if $UsePMemStorageProp is set"
+   val PMemLogPoolSizeDoc = s"PMem log pool size. Only used if $UsePMemStorageProp is set"
+   val PMemSizeDoc = s"PMem capacity. Only used if $UsePMemStorageProp is set"
+   val LogChannelTypeDoc = "Log channel type (e.g., file, pmem)"
+
+  private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
     import ConfigDef.Type._
@@ -1314,6 +1335,13 @@ object KafkaConfig {
       .defineInternal(RaftConfig.QUORUM_LINGER_MS_CONFIG, INT, Defaults.QuorumLingerMs, null, MEDIUM, RaftConfig.QUORUM_LINGER_MS_DOC)
       .defineInternal(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, INT, Defaults.QuorumRequestTimeoutMs, null, MEDIUM, RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_DOC)
       .defineInternal(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
+
+      /** ********* PMmem storage config *********/
+      .define(UsePMemStorageProp, BOOLEAN, Defaults.UsePMemStorage, MEDIUM, UsePMemStorageDoc)
+      .define(PMemPathProp, STRING, Defaults.PmemPath, MEDIUM, PMemPathDoc)
+      .define(PMemLogPoolSizeProp, INT, Defaults.PmemLogPoolSize, MEDIUM, PMemLogPoolSizeDoc)
+      .define(PMemSizeProp, LONG, Defaults.PmemSize, MEDIUM, PMemSizeDoc)
+      .define(LogChannelTypeProp, STRING, Defaults.LogChannelType, MEDIUM, LogChannelTypeDoc)
   }
 
   def configNames: Seq[String] = configDef.names.asScala.toBuffer.sorted
@@ -1323,8 +1351,9 @@ object KafkaConfig {
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
 
-  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig = {
     new KafkaConfig(props, doLog)
+  }
 
   def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
     fromProps(defaults, overrides, true)
@@ -1769,6 +1798,13 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val quorumLingerMs = getInt(RaftConfig.QUORUM_LINGER_MS_CONFIG)
   val quorumRequestTimeoutMs = getInt(RaftConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG)
   val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
+
+  /** ********* PMem storage Configuration **************/
+  val usePMemStorage = getBoolean(KafkaConfig.UsePMemStorageProp)
+  val pmemPath = getString(KafkaConfig.PMemPathProp)
+  val pmemLogPoolSize = getInt(KafkaConfig.PMemLogPoolSizeProp)
+  val pmemSize = getLong(KafkaConfig.PMemSizeProp)
+  val logChannelType = getString(KafkaConfig.LogChannelTypeProp)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)

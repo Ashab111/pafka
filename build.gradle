@@ -1132,6 +1132,9 @@ project(':clients') {
     implementation libs.snappy
     implementation libs.slf4jApi
 
+    compile files("$rootDir/libs/pcj.jar")
+    compile files("$rootDir/libs/llpl.jar")
+
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 

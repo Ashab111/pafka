@@ -51,6 +51,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
     private final FileChannel channel;
     private volatile File file;
 
+    public static enum FileChannelType {
+        FILE, PMEM
+    }
+
     /**
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
      * The constructor is visible for tests.
@@ -221,6 +225,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public boolean deleteIfExists() throws IOException {
         Utils.closeQuietly(channel, "FileChannel");
+        if (channel instanceof PMemChannel) {
+            ((PMemChannel) channel).delete();
+        }
         return Files.deleteIfExists(file.toPath());
     }
 
@@ -424,21 +431,36 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    boolean mutable,
                                    boolean fileAlreadyExists,
                                    int initFileSize,
-                                   boolean preallocate) throws IOException {
-        FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
+                                   boolean preallocate, FileChannelType channelType) throws IOException {
+        FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate, channelType);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
         return new FileRecords(file, channel, 0, end, false);
+    }
+
+    public static FileRecords open(File file,
+                                   boolean mutable,
+                                   boolean fileAlreadyExists,
+                                   int initFileSize,
+                                   boolean preallocate) throws IOException {
+        return open(file, mutable, fileAlreadyExists, initFileSize, preallocate, FileChannelType.FILE);
+    }
+
+    public static FileRecords open(File file,
+                                   boolean fileAlreadyExists,
+                                   int initFileSize,
+                                   boolean preallocate, FileChannelType channelType) throws IOException {
+        return open(file, true, fileAlreadyExists, initFileSize, preallocate, channelType);
     }
 
     public static FileRecords open(File file,
                                    boolean fileAlreadyExists,
                                    int initFileSize,
                                    boolean preallocate) throws IOException {
-        return open(file, true, fileAlreadyExists, initFileSize, preallocate);
+        return open(file, true, fileAlreadyExists, initFileSize, preallocate, FileChannelType.FILE);
     }
 
     public static FileRecords open(File file, boolean mutable) throws IOException {
-        return open(file, mutable, false, 0, false);
+        return open(file, mutable, false, 0, false, FileChannelType.FILE);
     }
 
     public static FileRecords open(File file) throws IOException {
@@ -459,18 +481,22 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                            boolean mutable,
                                            boolean fileAlreadyExists,
                                            int initFileSize,
-                                           boolean preallocate) throws IOException {
-        if (mutable) {
-            if (fileAlreadyExists || !preallocate) {
-                return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
-                        StandardOpenOption.WRITE);
-            } else {
-                RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
-                return randomAccessFile.getChannel();
-            }
+                                           boolean preallocate, FileChannelType channelType) throws IOException {
+        if (channelType == FileChannelType.PMEM) {
+            return PMemChannel.open(file.toPath(), initFileSize, preallocate);
         } else {
-            return FileChannel.open(file.toPath());
+            if (mutable) {
+                if (fileAlreadyExists || !preallocate) {
+                    return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
+                            StandardOpenOption.WRITE);
+                } else {
+                    RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
+                    randomAccessFile.setLength(initFileSize);
+                    return randomAccessFile.getChannel();
+                }
+            } else {
+                return FileChannel.open(file.toPath());
+            }
         }
     }
 

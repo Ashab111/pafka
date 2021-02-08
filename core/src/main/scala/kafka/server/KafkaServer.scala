@@ -37,6 +37,7 @@ import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient}
 import org.apache.kafka.clients.{ApiVersions, ClientDnsLookup, ManualMetadataUpdater, NetworkClient, NetworkClientUtils}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
+import org.apache.kafka.common.record.PMemChannel
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
@@ -55,7 +56,6 @@ import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
 object KafkaServer {
-
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false) =
     if (!config.zkSslClientEnable && !forceZkSslClientEnable)
       None
@@ -187,6 +187,14 @@ class KafkaServer(
       val canStartup = isStartingUp.compareAndSet(false, true)
       if (canStartup) {
         brokerState = BrokerState.STARTING
+
+        // pre-allocate heap
+        if (config.logChannelType.compareToIgnoreCase("pmem") == 0) {
+          val path = config.pmemPath
+          val size = config.pmemSize
+          val allocatedSize = config.logSegmentBytes.intValue()
+          PMemChannel.initHeap(path, size, allocatedSize, config.pmemLogPoolSize.intValue())
+        }
 
         /* setup zookeeper */
         initZkClient(time)

@@ -65,6 +65,7 @@ object Defaults {
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
   val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
   val MessageDownConversionEnable = kafka.server.Defaults.MessageDownConversionEnable
+  val ChannelType = kafka.server.Defaults.LogChannelType
 }
 
 case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
@@ -100,6 +101,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
   val messageDownConversionEnable = getBoolean(LogConfig.MessageDownConversionEnableProp)
+  val channelType = getString(LogConfig.ChannelTypeProp)
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -147,6 +149,8 @@ object LogConfig {
   val LeaderReplicationThrottledReplicasProp = "leader.replication.throttled.replicas"
   val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
 
+  val ChannelTypeProp = "channel.type"
+
   val SegmentSizeDoc = TopicConfig.SEGMENT_BYTES_DOC
   val SegmentMsDoc = TopicConfig.SEGMENT_MS_DOC
   val SegmentJitterMsDoc = TopicConfig.SEGMENT_JITTER_MS_DOC
@@ -180,6 +184,8 @@ object LogConfig {
     "the follower side. The list should describe a set of " + "replicas in the form " +
     "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
     "all replicas for this topic."
+
+  val ChannelTypeDoc = "Log channel type, e.g., file (normal FileChannel), pmem (pmem-based FileChannel)"
 
   private[log] val ServerDefaultHeaderName = "Server Default Property"
 
@@ -291,6 +297,7 @@ object LogConfig {
         FollowerReplicationThrottledReplicasDoc, FollowerReplicationThrottledReplicasProp)
       .define(MessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW,
         MessageDownConversionEnableDoc, KafkaConfig.LogMessageDownConversionEnableProp)
+      .define(ChannelTypeProp, STRING, Defaults.ChannelType, MEDIUM, ChannelTypeDoc, KafkaConfig.LogChannelTypeProp)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())
@@ -408,6 +415,7 @@ object LogConfig {
     logProps.put(MessageTimestampTypeProp, kafkaConfig.logMessageTimestampType.name)
     logProps.put(MessageTimestampDifferenceMaxMsProp, kafkaConfig.logMessageTimestampDifferenceMaxMs: java.lang.Long)
     logProps.put(MessageDownConversionEnableProp, kafkaConfig.logMessageDownConversionEnable: java.lang.Boolean)
+    logProps.put(LogConfig.ChannelTypeProp, kafkaConfig.logChannelType: java.lang.String)
     logProps
   }
 }
