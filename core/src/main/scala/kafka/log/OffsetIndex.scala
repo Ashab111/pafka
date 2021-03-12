@@ -60,7 +60,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   private[this] var _lastOffset = lastEntry.offset
 
   debug(s"Loaded index file ${file.getAbsolutePath} with maxEntries = $maxEntries, " +
-    s"maxIndexSize = $maxIndexSize, entries = ${_entries}, lastOffset = ${_lastOffset}, file position = ${buffer.position()}")
+    s"maxIndexSize = $maxIndexSize, entries = ${_entries}, lastOffset = ${_lastOffset}, file position = ${mmap.position()}")
 
   /**
    * The last entry in the index
@@ -69,7 +69,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
     inLock(lock) {
       _entries match {
         case 0 => OffsetPosition(baseOffset, 0)
-        case s => parseEntry(buffer, s - 1)
+        case s => parseEntry(mmap, s - 1)
       }
     }
   }
@@ -87,7 +87,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    */
   def lookup(targetOffset: Long): OffsetPosition = {
     maybeLock(lock) {
-      val idx = buffer.duplicate
+      val idx = mmap.duplicate
       val slot = largestLowerBoundSlotFor(idx, targetOffset, IndexSearchType.KEY)
       if(slot == -1)
         OffsetPosition(baseOffset, 0)
@@ -103,7 +103,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    */
   def fetchUpperBoundOffset(fetchOffset: OffsetPosition, fetchSize: Int): Option[OffsetPosition] = {
     maybeLock(lock) {
-      val idx = buffer.duplicate
+      val idx = mmap.duplicate
       val slot = smallestUpperBoundSlotFor(idx, fetchOffset.position + fetchSize, IndexSearchType.VALUE)
       if (slot == -1)
         None
@@ -130,7 +130,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       if (n >= _entries)
         throw new IllegalArgumentException(s"Attempt to fetch the ${n}th entry from index ${file.getAbsolutePath}, " +
           s"which has size ${_entries}.")
-      parseEntry(buffer, n)
+      parseEntry(mmap, n)
     }
   }
 
@@ -143,11 +143,11 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
         trace(s"Adding index entry $offset => $position to ${file.getAbsolutePath}")
-        buffer.putInt(relativeOffset(offset))
-        buffer.putInt(position)
+        mmap.putInt(relativeOffset(offset))
+        mmap.putInt(position)
         _entries += 1
         _lastOffset = offset
-        require(_entries * entrySize == buffer.position(), s"$entries entries but file position in index is ${buffer.position()}.")
+        require(_entries * entrySize == mmap.position(), s"$entries entries but file position in index is ${mmap.position()}.")
       } else {
         throw new InvalidOffsetException(s"Attempt to append an offset ($offset) to position $entries no larger than" +
           s" the last offset appended (${_lastOffset}) to ${file.getAbsolutePath}.")
@@ -159,7 +159,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
 
   override def truncateTo(offset: Long): Unit = {
     inLock(lock) {
-      val idx = buffer.duplicate
+      val idx = mmap.duplicate
       val slot = largestLowerBoundSlotFor(idx, offset, IndexSearchType.KEY)
 
       /* There are 3 cases for choosing the new size
@@ -184,10 +184,10 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   private def truncateToEntries(entries: Int): Unit = {
     inLock(lock) {
       _entries = entries
-      buffer.position(_entries * entrySize)
+      mmap.position(_entries * entrySize)
       _lastOffset = lastEntry.offset
       debug(s"Truncated index ${file.getAbsolutePath} to $entries entries;" +
-        s" position is now ${buffer.position()} and last offset is now ${_lastOffset}")
+        s" position is now ${mmap.position()} and last offset is now ${_lastOffset}")
     }
   }
 

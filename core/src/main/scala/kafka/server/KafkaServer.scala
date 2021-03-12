@@ -193,7 +193,7 @@ class KafkaServer(
           val path = config.pmemPath
           val size = config.pmemSize
           val allocatedSize = config.logSegmentBytes.intValue()
-          PMemChannel.initHeap(path, size, allocatedSize, config.pmemLogPoolSize.intValue())
+          PMemChannel.initHeap(path, size, allocatedSize, config.pmemLogPoolRatio.doubleValue())
         }
 
         /* setup zookeeper */

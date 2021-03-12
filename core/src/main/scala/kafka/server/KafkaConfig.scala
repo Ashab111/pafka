@@ -283,9 +283,8 @@ object Defaults {
   val QuorumRetryBackoffMs = RaftConfig.DEFAULT_QUORUM_RETRY_BACKOFF_MS
 
   /** ********* PMem storage Configuration **************/
-  val UsePMemStorage = false
   val PmemPath = "/tmp/pmem"
-  val PmemLogPoolSize = 10
+  val PmemLogPoolRatio = 0.8
   val PmemSize = 1024L * 1024 * 1024 * 20
   val LogChannelType = "file"
 }
@@ -606,10 +605,9 @@ object KafkaConfig {
   val PasswordEncoderIterationsProp =  "password.encoder.iterations"
 
   /** ********* pmem-related configs *********/
-  val UsePMemStorageProp = "storage.pmem"
   val PMemPathProp = "storage.pmem.path"
-  val PMemLogPoolSizeProp = "storage.pmem.log.pool"
   val PMemSizeProp = "storage.pmem.size"
+  val PMemLogPoolRatioProp = "log.pmem.pool.ratio"
   val LogChannelTypeProp = "log.channel.type"
 
   /* Documentation */
@@ -1041,10 +1039,9 @@ object KafkaConfig {
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
    /** ********* PMmem storage config *********/
-   val UsePMemStorageDoc = "Whether use PMem as the log storage"
-   val PMemPathDoc = s"PMem device mount location. Only used if $UsePMemStorageProp is set"
-   val PMemLogPoolSizeDoc = s"PMem log pool size. Only used if $UsePMemStorageProp is set"
-   val PMemSizeDoc = s"PMem capacity. Only used if $UsePMemStorageProp is set"
+   val PMemPathDoc = s"PMem device mount location. Only used if $LogChannelTypeProp == pmem"
+   val PMemLogPoolRatioDoc = s"PMem log pool proportion of total pmem size. Only used if $LogChannelTypeProp == pmem"
+   val PMemSizeDoc = s"PMem capacity. Only used if $LogChannelTypeProp == pmem"
    val LogChannelTypeDoc = "Log channel type (e.g., file, pmem)"
 
   private val configDef = {
@@ -1337,9 +1334,8 @@ object KafkaConfig {
       .defineInternal(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
 
       /** ********* PMmem storage config *********/
-      .define(UsePMemStorageProp, BOOLEAN, Defaults.UsePMemStorage, MEDIUM, UsePMemStorageDoc)
       .define(PMemPathProp, STRING, Defaults.PmemPath, MEDIUM, PMemPathDoc)
-      .define(PMemLogPoolSizeProp, INT, Defaults.PmemLogPoolSize, MEDIUM, PMemLogPoolSizeDoc)
+      .define(PMemLogPoolRatioProp, DOUBLE, Defaults.PmemLogPoolRatio, MEDIUM, PMemLogPoolRatioDoc)
       .define(PMemSizeProp, LONG, Defaults.PmemSize, MEDIUM, PMemSizeDoc)
       .define(LogChannelTypeProp, STRING, Defaults.LogChannelType, MEDIUM, LogChannelTypeDoc)
   }
@@ -1351,9 +1347,8 @@ object KafkaConfig {
   def fromProps(props: Properties): KafkaConfig =
     fromProps(props, true)
 
-  def fromProps(props: Properties, doLog: Boolean): KafkaConfig = {
+  def fromProps(props: Properties, doLog: Boolean): KafkaConfig =
     new KafkaConfig(props, doLog)
-  }
 
   def fromProps(defaults: Properties, overrides: Properties): KafkaConfig =
     fromProps(defaults, overrides, true)
@@ -1800,9 +1795,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val quorumRetryBackoffMs = getInt(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG)
 
   /** ********* PMem storage Configuration **************/
-  val usePMemStorage = getBoolean(KafkaConfig.UsePMemStorageProp)
   val pmemPath = getString(KafkaConfig.PMemPathProp)
-  val pmemLogPoolSize = getInt(KafkaConfig.PMemLogPoolSizeProp)
+  val pmemLogPoolRatio = getDouble(KafkaConfig.PMemLogPoolRatioProp)
   val pmemSize = getLong(KafkaConfig.PMemSizeProp)
   val logChannelType = getString(KafkaConfig.LogChannelTypeProp)
 

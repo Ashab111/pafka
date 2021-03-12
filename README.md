@@ -1,274 +1,195 @@
-Apache Kafka
-=================
-See our [web site](https://kafka.apache.org) for details on the project.
+<img src="docs/plot/logo.png" alt="logo" width="100"/>
 
-You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
+Pafka: PMem-Accelerated Kafka
+===
 
-We build and test Apache Kafka with Java 8, 11 and 15. We set the `release` parameter in javac and scalac
-to `8` to ensure the generated binaries are compatible with Java 8 or higher (independently of the Java version
-used for compilation).
+## Introduction
 
-Scala 2.13 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
+Pafka is an evolved version of Apache Kafka developed by 4Paradigm.
+Kafka is an open-source distributed event streaming/message queue system for handling real-time data feeds efficiently and reliably.
+However, its performance (e.g., throughput) is constrained by the disk bandwidth, which further deteriorates due to the file system overhead.
 
-### Build a jar and run it ###
+Pafka equips Kafka with Intel® Optane™ Persistent Memory (PMem) support, which relies on the native pmdk libraries
+rather than treat PMem as a normal disk device. 
+With careful design and implementation, Pafka can achieve 7.5 GB/s write throughput and 10 GB/s read throughput in terms of single-server performance.
+
+**Note that this is currently a beta-release. While we are doing further optimization and testing, 
+stable versions will be released soon.**
+
+## Community
+
+- Chatting: For any feedback, suggestions, issues, and anythings about using Pafka, you can join our interactive discussion channel at Slack [#pafka-help](https://memarkworkspace.slack.com/archives/C01RPEU93MM)
+- Development dicussion: If you would like to report a bug, please use the GitHub Issues; if you would like to propose a new feature, or would like to start a pull request, please use the GitHub Discussions, and our developers will respond promptly.
+
+## Get Started
+
+For complete documentation of Kafka, refer to [here](README.kafka.md).
+
+### Compile
+
+#### Dependencies
+
+- [pmdk pcj](https://github.com/4paradigm/pcj)
+- [pmdk llpl](https://github.com/4paradigm/llpl)
+
+> :warning: **We have done some modifications on the original pmdk source codes. 
+> So please download the source code from the two repositories provided above.**
+
+
+**Actually we have already shipped pcj and llpl jars in `libs` folder in the Pafka repository.
+They are compiled with java 8 and g++ 4.8.5. In general, you are not required to compile the two libraries
+by yourself. However, if you encounter any compilation/running error caused by these two libraries,
+you can download the source codes and compile on your own environment.**
+
+##### Compile pmdk libraries
+
+After clone the source code:
+
+    # compile pcj
+    cd pcj
+    make && make jar
+    cp target/pcj.jar $PAFKA_HOME/libs
+    
+    # compile llpl
+    cd llpl
+    make && make jar
+    cp target/llpl.jar $PAFKA_HOME/libs
+
+ 
+
+
+
+#### Build Pafka jar
+
     ./gradlew jar
 
-Follow instructions in https://kafka.apache.org/quickstart
+### Run
 
-### Build source jar ###
-    ./gradlew srcJar
+#### Environmental setup
+To see whether it works or not, you can use any file system with normal hard disk.
+For the best performance, it requires the availability of PMem hardware mounted as a DAX file system. 
 
-### Build aggregated javadoc ###
-    ./gradlew aggregatedJavadoc
 
-### Build javadoc and scaladoc ###
-    ./gradlew javadoc
-    ./gradlew javadocJar # builds a javadoc jar for each module
-    ./gradlew scaladoc
-    ./gradlew scaladocJar # builds a scaladoc jar for each module
-    ./gradlew docsJar # builds both (if applicable) javadoc and scaladoc jars for each module
+#### Config
 
-### Run unit/integration tests ###
-    ./gradlew test # runs both unit and integration tests
-    ./gradlew unitTest
-    ./gradlew integrationTest
+In order to support PMem storage, we add some more config fields to the Kafka [server config](config/server.properties). 
+
+|Config|Default Value|Note|
+|------|-------------|----|
+|storage.pmem.path|/tmp/pmem|pmem mount path|
+|storage.pmem.size|21,474,836,480|pmem size|
+|log.pmem.pool.ratio|0.8|A pool of log segments will be pre-allocated. This is the proportion of total pmem size. Pre-allocation will increase the first startup time, but can eliminate the dynamic allocation cost when serving requests.|
+|log.channel.type|file|log file channel type. Options: "file", "pmem".<br />"file": use normal FileChannel as vanilla Kafka does <br />"pmem": use PMemChannel, which will use pmem as the log storage|
+
+> :warning: **`log.preallocate` has to be set to `true` if use pmem, as PMem MemoryBlock does not support `append`-like operations.**
+
+Sample config in config/server.properties is as follows:
+
+    storage.pmem.path=/mnt/pmem/kafka/
+    storage.pmem.size=107374182400  # 100 GB
+    log.pmem.pool.ratio=0.9
+    log.channel.type=pmem
     
-### Force re-running tests without code change ###
-    ./gradlew cleanTest test
-    ./gradlew cleanTest unitTest
-    ./gradlew cleanTest integrationTest
+    log.preallocate=true  # have to set to true if use pmem
 
-### Running a particular unit/integration test ###
-    ./gradlew clients:test --tests RequestResponseTest
+#### Start Kafka
+Follow instructions in https://kafka.apache.org/quickstart. Basically:
 
-### Running a particular test method within a unit/integration test ###
-    ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
-    ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testMetadataUpdateWaitTime
+    bin/zookeeper-server-start.sh config/zookeeper.properties
+    bin/kafka-server-start.sh config/server.properties
 
-### Running a particular unit/integration test with log4j output ###
-Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
+### Performance Results
 
-    ./gradlew clients:test --tests RequestResponseTest
+We conducted some preliminary experiments on our in-house servers.
+One server is used as the Kafka broker server,
+and another two servers as the clients.
+Each of the client servers run 16 clients to saturate the server throughput.
+We're using the `ProducerPerformance` and `ConsumerPerformance` shipped by Kafka
+and the record size of 1024 for the benchmark.
 
-### Specifying test retries ###
-By default, each failed test is retried once up to a maximum of five retries per test run. Tests are retried at the end of the test task. Adjust these parameters in the following way:
+#### Server Specification
 
-    ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-    
-See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for more details.
+The server spec is as follows:
 
-### Generating test coverage reports ###
-Generate coverage reports for the whole project:
+|Item|Spec|
+|---|----|
+|CPU|Intel(R) Xeon(R) Gold 6252 Processor (24 cores/48 threads) * 2|
+|Memory|376 GB|
+|Network|Mellanox ConnectX-5 100 GBps|
+|PMem|128 GB x 6 = 768 GB|
 
-    ./gradlew reportCoverage -PenableTestCoverage=true
+The storage spec and performance:
 
-Generate coverage for a single module, i.e.: 
+|Storage Type|Write (MB/s)|Read (MB/s)|
+|---|---|---|
+|HDD|32k: 5.7 <br/> 320k: 37.5 <br/> 3200k: 78.3 <br/>|86.5|
+|HDD RAID|530|313|
+|Sata SSD|458|300|
+|NVMe SSD|2,421|2,547|
+|PMem|9,500|37,120|
 
-    ./gradlew clients:reportCoverage -PenableTestCoverage=true
-    
-### Building a binary release gzipped tar ball ###
-    ./gradlew clean releaseTarGz
+For `HDD`, we use batch size of 32k, 320k and 3200k for write, respectively, while read does not change much as we increase the batch size.
+For other storage types, we use batch size of 32k, as increasing to larger batch size does not increase the performance much.
+For `PMem`, we use `PersistentMemoryBlock` of [pmdk llpl](https://github.com/4paradigm/llpl) for the performance benchmark.
 
-The release file can be found inside `./core/build/distributions/`.
+#### Throughput
 
-### Building auto generated messages ###
-Sometimes it is only necessary to rebuild the RPC auto-generated message data when switching between branches, as they could
-fail due to code changes. You can just run:
- 
-    ./gradlew processMessages processTestMessages
+<img src="docs/plot/perf.png" alt="performance" width="800"/>
 
-### Running a Kafka broker with ZooKeeper
+<!---
+Storage Type |	producer throughput | consumer throughput|
+|---|---|---|
+|HDD|74394.0 records/sec (72.64 MB/sec)|63143.9413 records/sec (61.6640 MB/s)|
+HDD	RAID | 444336.5 records/sec (433.92 MB/sec) | 293637.6567 records/sec (286.7553 MB/s)|
+Sata SSD |492760.7 records/sec (481.22 MB/sec) | 456223.8026 records/sec (445.5311 MB/s) |
+NVMe SSD | 2050658.2 records/sec (2002.61 MB/sec) | 2582104.8498 records/sec (2521.5865 MB/s) |
+PMem (Pafka) | 7688881.9 records/sec (7508.68 MB/sec) |10264739.3093 records/sec (10024.1593 MB/s)|
+-->
 
-    ./bin/zookeeper-server-start.sh config/zookeeper.properties
-    ./bin/kafka-server-start.sh config/server.properties
+As we can see, the consumer throughput of PMem has almost reached the network bottleneck (100 Gbps ~= 12.5 GB/s).
+Compared with NVMe SSD, Pafka boosts the producer throughput by 275% to 7508.68 MB/sec.
 
-### Running a Kafka broker in self-managed mode
+### Cost Comparison
 
-See [config/self-managed/README.md](https://github.com/apache/kafka/blob/trunk/config/self-managed/README.md).
+One of the most significant advantages of persistent memory is to save TCO (Total Cost of Ownership). Compared with the original HDD/SDD based Kafka, the PMEM-enhanced Pafka reduces the cost by providing higher throughput on a single server. In this section, we only compare the hardware cost as the TCO.
 
-### Cleaning the build ###
-    ./gradlew clean
+Suppose our target is to provide the overall throughput of 20 GB/sec (the bottleneck can be either producer or consumer depending on the storage type). We compare the PMem based Pafka with SATA SSD based Kafka. Kafka based on SATA SSD should be a common configuration in modern data centers. Please refer to the above Server Specification under the section of Performance Results.
 
-### Running a task with one of the Scala versions available (2.12.x or 2.13.x) ###
-*Note that if building the jars with a version other than 2.13.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+Here is the key information we used for our hardware cost estimation.  
 
-You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
+- SATA SSD based Kafka: the hardware cost for a single server is estimated as USD 10,000. 
+- PMem based Pafka: We equip the same server configuration with additional 128 GB x 6 = 768 GB PMem. The hardware cost of such a PMem backed server is estimated as USD 13,500.
 
-    ./gradlew -PscalaVersion=2.12 jar
-    ./gradlew -PscalaVersion=2.12 test
-    ./gradlew -PscalaVersion=2.12 releaseTarGz
+The below figure demonstrated that, in order to achieve the overall throughput of 20 GB/sec, the numbers of SATA SSD based servers and PMem based servers are 45 and 3, respectively. Furthermore, for the hardware cost, the traditional Kafka (SATA SSD) takes USD 450K, while our Pafka (PMem) solution takes USD 40.5K only. The Pafka solution significantly reduces the hardware cost  to 9% of the traditional Kafka solution only.
 
-### Running a task with all the scala versions enabled by default ###
+<img src="docs/plot/tco.png" alt="tco" width="800"/>
 
-Invoke the `gradlewAll` script followed by the task(s):
+## Limitations
 
-    ./gradlewAll test
-    ./gradlewAll jar
-    ./gradlewAll releaseTarGz
+- We only benchmark the performance on the single-server setting. Multiple-server benchmark is undergoing.
+- pmdk llpl `MemoryBlock` does not provide a `ByteBuffer` API. 
+We did some hacking to provide a zero-copy ByteBuffer API. You may see some warnings from JRE with version >= 9.
+We've tested on Java 8, Java 11 and Java 15.
 
-### Running a task for a specific project ###
-This is for `core`, `examples` and `clients`
 
-    ./gradlew core:jar
-    ./gradlew core:test
+   > WARNING: An illegal reflective access operation has occurred                                                                                                                                                    
+   > WARNING: Illegal reflective access by com.intel.pmem.llpl.MemoryAccessor (file:/4pd/home/zhanghao/workspace/kafka/core/build/dependant-libs-2.13.4/llpl.jar) to field java.nio.Buffer.address                   
+   > WARNING: Please consider reporting this to the maintainers of com.intel.pmem.llpl.MemoryAccessor                                                                                                                
+   > WARNING: Use --illegal-access=warn to enable warnings of further illegal reflective access operations                                                                                                           
+   > WARNING: All illegal access operations will be denied in a future release
 
-Streams has multiple sub-projects, but you can run all the tests:
 
-    ./gradlew :streams:testAll
+- Currently, only the log files are stored in PMem, while the indexes are still kept as normal files,
+as we do not see much performance gain if we move the indexes to PMem.
 
-### Listing all gradle tasks ###
-    ./gradlew tasks
 
-### Building IDE project ####
-*Note that this is not strictly necessary (IntelliJ IDEA has good built-in support for Gradle projects, for example).*
 
-    ./gradlew eclipse
-    ./gradlew idea
+## Development Team
 
-The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
-build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
-to avoid known issues with this configuration.
+Pafka is an open-source project developed by the HPC team of 4Paradigm. For any technical feedback, please contact the authors:
+- ZHANG Hao: zhanghao@4paradigm.com
+- LU Mian: lumian@4paradigm.com
+- Yang Jun: yangjun@4paradigm.com
 
-### Publishing the jar for all version of Scala and for all projects to maven ###
-The recommended command is:
 
-    ./gradlewAll publish
 
-For backwards compatibility, the following also works:
-
-    ./gradlewAll uploadArchives
-
-Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
-
-    mavenUrl=
-    mavenUsername=
-    mavenPassword=
-    signing.keyId=
-    signing.password=
-    signing.secretKeyRingFile=
-
-### Publishing the streams quickstart archetype artifact to maven ###
-For the Streams archetype project, one cannot use gradle to upload to maven; instead the `mvn deploy` command needs to be called at the quickstart folder:
-
-    cd streams/quickstart
-    mvn deploy
-
-Please note for this to work you should create/update user maven settings (typically, `${USER_HOME}/.m2/settings.xml`) to assign the following variables
-
-    <settings xmlns="http://maven.apache.org/SETTINGS/1.0.0"
-       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-       xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.0.0
-                           https://maven.apache.org/xsd/settings-1.0.0.xsd">
-    ...                           
-    <servers>
-       ...
-       <server>
-          <id>apache.snapshots.https</id>
-          <username>${maven_username}</username>
-          <password>${maven_password}</password>
-       </server>
-       <server>
-          <id>apache.releases.https</id>
-          <username>${maven_username}</username>
-          <password>${maven_password}</password>
-        </server>
-        ...
-     </servers>
-     ...
-
-
-### Installing the jars to the local Maven repository ###
-The recommended command is:
-
-    ./gradlewAll publishToMavenLocal
-
-For backwards compatibility, the following also works:
-
-    ./gradlewAll install
-
-### Building the test jar ###
-    ./gradlew testJar
-
-### Determining how transitive dependencies are added ###
-    ./gradlew core:dependencies --configuration runtime
-
-### Determining if any dependencies could be updated ###
-    ./gradlew dependencyUpdates
-
-### Running code quality checks ###
-There are two code quality analysis tools that we regularly run, spotbugs and checkstyle.
-
-#### Checkstyle ####
-Checkstyle enforces a consistent coding style in Kafka.
-You can run checkstyle using:
-
-    ./gradlew checkstyleMain checkstyleTest
-
-The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
-subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
-
-#### Spotbugs ####
-Spotbugs uses static analysis to look for bugs in the code.
-You can run spotbugs using:
-
-    ./gradlew spotbugsMain spotbugsTest -x test
-
-The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
-directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
-
-### JMH microbenchmarks ###
-We use [JMH](https://openjdk.java.net/projects/code-tools/jmh/) to write microbenchmarks that produce reliable results in the JVM.
-    
-See [jmh-benchmarks/README.md](https://github.com/apache/kafka/blob/trunk/jmh-benchmarks/README.md) for details on how to run the microbenchmarks.
-
-### Common build options ###
-
-The following options should be set with a `-P` switch, for example `./gradlew -PmaxParallelForks=1 test`.
-
-* `commitId`: sets the build commit ID as .git/HEAD might not be correct if there are local commits added for build purposes.
-* `mavenUrl`: sets the URL of the maven deployment repository (`file://path/to/repo` can be used to point to a local repository).
-* `maxParallelForks`: limits the maximum number of processes for each task.
-* `ignoreFailures`: ignore test failures from junit
-* `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
-* `skipSigning`: skips signing of artifacts.
-* `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
-* `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
-* `maxTestRetries`: the maximum number of retries for a failing test case.
-* `maxTestRetryFailures`: maximum number of test failures before retrying is disabled for subsequent tests.
-* `enableTestCoverage`: enables test coverage plugins and tasks, including bytecode enhancement of classes required to track said
-coverage. Note that this introduces some overhead when running tests and hence why it's disabled by default (the overhead
-varies, but 15-20% is a reasonable estimate).
-* `scalaOptimizerMode`: configures the optimizing behavior of the scala compiler, the value should be one of `none`, `method`, `inline-kafka` or
-`inline-scala` (the default is `inline-kafka`). `none` is the scala compiler default, which only eliminates unreachable code. `method` also
-includes method-local optimizations. `inline-kafka` adds inlining of methods within the kafka packages. Finally, `inline-scala` also
-includes inlining of methods within the scala library (which avoids lambda allocations for methods like `Option.exists`). `inline-scala` is
-only safe if the Scala library version is the same at compile time and runtime. Since we cannot guarantee this for all cases (for example, users
-may depend on the kafka jar for integration tests where they may include a scala library with a different version), we don't enable it by
-default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more details.
-
-### Dependency Analysis ###
-
-The gradle [dependency debugging documentation](https://docs.gradle.org/current/userguide/viewing_debugging_dependencies.html) mentions using the `dependencies` or `dependencyInsight` tasks to debug dependencies for the root project or individual subprojects.
-
-Alternatively, use the `allDeps` or `allDepInsight` tasks for recursively iterating through all subprojects:
-
-    ./gradlew allDeps
-
-    ./gradlew allDepInsight --configuration runtime --dependency com.fasterxml.jackson.core:jackson-databind
-
-These take the same arguments as the builtin variants.
-
-### Running system tests ###
-
-See [tests/README.md](tests/README.md).
-
-### Running in Vagrant ###
-
-See [vagrant/README.md](vagrant/README.md).
-
-### Contribution ###
-
-Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
-
-To contribute follow the instructions here:
- * https://kafka.apache.org/contributing.html

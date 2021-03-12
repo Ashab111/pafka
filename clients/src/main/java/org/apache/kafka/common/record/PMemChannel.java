@@ -21,6 +21,10 @@ import com.intel.pmem.llpl.AnyHeap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.OutputStreamWriter;
+import java.io.File;
+import java.io.BufferedWriter;
+import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
@@ -32,12 +36,14 @@ import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.LinkedList;
 import static java.lang.Math.min;
+import java.nio.charset.StandardCharsets;
 
 import lib.util.persistent.ObjectDirectory;
 import lib.util.persistent.PersistentInteger;
 import lib.util.persistent.PersistentString;
 import lib.util.persistent.PersistentLong;
 import com.intel.pmem.llpl.PersistentHeap;
+import com.intel.pmem.llpl.HeapException;
 import com.intel.pmem.llpl.PersistentMemoryBlock;
 
 class Pool<T> {
@@ -71,13 +77,37 @@ public class PMemChannel extends FileChannel {
     private static AtomicInteger counter = new AtomicInteger();
     private final static Object GLOBAL_LOCK = new Object();
 
-    public static void initHeap(String path, long size, int allocatedSize, int poolSize) {
-        if (!AnyHeap.exists(path)) {
-            ObjectDirectory.put("_heap_path", new PersistentString(path));
+    public static void initHeap(String path, long size, int allocatedSize, double poolRatio) {
+        String heapPath = path + "/pmem_heap";
+        String metaPath = path + "/pmem_meta";
+
+        File heapDir = new File(path);
+        if (!heapDir.mkdirs()) {
+            log.debug(heapDir + " already exists.");
+        }
+
+        // TODO(zhanghao): config.properties is required by pmdk pcj. For now we generate dynamically here
+        try {
+            BufferedWriter metaConfig = new BufferedWriter(new OutputStreamWriter(new FileOutputStream("config.properties"), StandardCharsets.UTF_8));
+            long metaPoolSize = (poolSize + 100) * 1024L * 1024;  // entry number will be #poolBlock + #dynamicBlock (we assume its max is 100)
+            String metaConfigContent = "path=" + metaPath + "\n" + "size=" + metaPoolSize + "\n";
+            metaConfig.write(metaConfigContent);
+            metaConfig.flush();
+            log.info("Generate config.properties for pmdk pcj");
+
+            metaConfig.close();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        if (!AnyHeap.exists(heapPath)) {
+            int poolSize = (int) (size * poolRatio / allocatedSize);
+            log.info("Init heap: size = " + size + ", poolSize = " + poolSize + " (" + (poolRatio * 100) + "% of total size)" + ", poolEntry size = " + allocatedSize);
+            ObjectDirectory.put("_heap_path", new PersistentString(heapPath));
             ObjectDirectory.put("_pool_allocated_size", new PersistentInteger(allocatedSize));
             ObjectDirectory.put("_pool_size", new PersistentInteger(poolSize));
 
-            PersistentHeap heap = PersistentHeap.createHeap(path, size);
+            PersistentHeap heap = PersistentHeap.createHeap(heapPath, size);
             if (poolSize > 0) {
                 for (int i = 0; i < poolSize; i++) {
                     PersistentMemoryBlock block = heap.allocateMemoryBlock(allocatedSize);
@@ -90,9 +120,9 @@ public class PMemChannel extends FileChannel {
                 // init pool used to 0
                 ObjectDirectory.put("_pool_used", new PersistentInteger(0));
             }
-            log.info("init heap " + path + " done");
+            log.info("init heap " + heapPath + " done");
         } else {
-            log.info("PMem heap " + path + " already exists. No need to re-init");
+            log.info("PMem heap " + heapPath + " already exists. No need to re-init");
         }
     }
 
@@ -174,8 +204,13 @@ public class PMemChannel extends FileChannel {
             }
 
             // TODO(zhanghao): what if initSize is 0
-            if (poolSize == 0 || initSize != poolAllocatedSize) {
-                pBlock = heap.allocateMemoryBlock(initSize);
+            if (poolSize == 0 || initSize != poolAllocatedSize || counter.get() >= poolSize) {
+                try {
+                    pBlock = heap.allocateMemoryBlock(initSize);
+                } catch (HeapException e) {
+                    error(e.toString());
+                    throw e;
+                }
                 ObjectDirectory.put(file.toString(), new PersistentLong(pBlock.handle()));
                 info("Dynamically allocate " + initSize + " with handle " + pBlock.handle());
             } else {
@@ -201,7 +236,7 @@ public class PMemChannel extends FileChannel {
 
         // create an empty log file as Kafka will check its existence
         if (!file.toFile().createNewFile()) {
-            warn(file + " already exits");
+            debug(file + " already exits");
         }
         info("Allocate PMemChannel with size " + channelSize);
     }

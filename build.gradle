@@ -152,6 +152,7 @@ if (file('.git').exists()) {
         'config/self-managed/README.md',
         'TROGDOR.md',
         '**/README.md',
+        '**/README.kafka.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',

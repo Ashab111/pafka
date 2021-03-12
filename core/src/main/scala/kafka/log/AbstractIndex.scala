@@ -41,7 +41,7 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
 
   // Length of the index file
   @volatile
-  protected var _length: Long = _
+  private var _length: Long = _
   protected def entrySize: Int
 
   /*
@@ -137,15 +137,11 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
     }
   }
 
-  protected def buffer: ByteBuffer = {
-    mmap
-  }
-
   /**
    * The maximum number of entries this index can hold
    */
   @volatile
-  protected[this] var _maxEntries: Int = mmap.limit() / entrySize
+  private[this] var _maxEntries: Int = mmap.limit() / entrySize
 
   /** The number of entries in this index */
   @volatile
@@ -421,7 +417,7 @@ abstract class AbstractIndex(@volatile private var _file: File, val baseOffset: 
    * Round a number to the greatest exact multiple of the given factor less than the given number.
    * E.g. roundDownToExactMultiple(67, 8) == 64
    */
-  protected def roundDownToExactMultiple(number: Int, factor: Int) = factor * (number / factor)
+  private def roundDownToExactMultiple(number: Int, factor: Int) = factor * (number / factor)
 
   private def toRelative(offset: Long): Option[Int] = {
     val relativeOffset = offset - baseOffset
