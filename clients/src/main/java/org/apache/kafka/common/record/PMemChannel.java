@@ -101,6 +101,9 @@ public class PMemChannel extends FileChannel {
         }
 
         if (!AnyHeap.exists(heapPath)) {
+            if (poolRatio > 0.9) {
+                log.warn("poolRatio larger than 90%, may fail to allocate");
+            }
             int poolSize = (int) (size * poolRatio / allocatedSize);
             log.info("Init heap: size = " + size + ", poolSize = " + poolSize + " (" + (poolRatio * 100) + "% of total size)" + ", poolEntry size = " + allocatedSize);
             ObjectDirectory.put("_heap_path", new PersistentString(heapPath));
