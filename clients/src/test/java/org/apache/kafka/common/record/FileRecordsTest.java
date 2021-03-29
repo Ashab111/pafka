@@ -28,8 +28,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-import org.junit.runner.RunWith;
-import org.junit.runners.Parameterized;
 
 import java.io.File;
 import java.io.IOException;
@@ -41,8 +39,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
-import java.util.Collection;
-import java.util.Arrays;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -67,7 +63,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@RunWith(Parameterized.class)
 public class FileRecordsTest {
 
     private byte[][] values = new byte[][] {
@@ -75,42 +70,13 @@ public class FileRecordsTest {
             "efgh".getBytes(),
             "ijkl".getBytes()
     };
-    private FileRecords fileRecords;
+    protected FileRecords fileRecords;
     private Time time;
-    private int initSize;
-    private boolean usePMem;
-
-    @Parameterized.Parameters
-    public static Collection<Boolean> testCases() {
-        return Arrays.asList(true, false);
-    }
-
-    public FileRecordsTest(boolean usePMem) {
-        this.usePMem = usePMem;
-    }
 
     @BeforeEach
     public void setup() throws IOException {
-        if (usePMem) {
-            String pmemDir = "/tmp/pmem";
-            File directory = new File(pmemDir);
-            if (directory.exists()) {
-                String[] entries = directory.list();
-                for (String s : entries) {
-                    File currentFile = new File(directory.getPath(), s);
-                    currentFile.delete();
-                }
-                directory.delete();
-            }
-            directory.mkdirs();
-
-            String path = pmemDir + "/heap";
-            long size = 1024L * 1024 * 1024 * 10;
-            this.initSize = 10 * 1024 * 1024;
-            PMemChannel.initHeap(path, size, initSize, 0.9);
-        }
-
         this.fileRecords = createFileRecords(values);
+        append(fileRecords, values);
         this.time = new MockTime();
     }
 
@@ -149,18 +115,10 @@ public class FileRecordsTest {
      */
     @Test
     public void testFileSize() throws IOException {
-        if (usePMem) {
-            assertEquals(fileRecords.channel().position(), fileRecords.sizeInBytes());
-        } else {
-            assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
-        }
+        assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         for (int i = 0; i < 20; i++) {
             fileRecords.append(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("abcd".getBytes())));
-            if (usePMem) {
-                assertEquals(fileRecords.channel().position(), fileRecords.sizeInBytes());
-            } else {
-                assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
-            }
+            assertEquals(fileRecords.channel().size(), fileRecords.sizeInBytes());
         }
     }
 
@@ -732,14 +690,8 @@ public class FileRecordsTest {
         return TestUtils.toList(buffer.batches());
     }
 
-    private FileRecords createFileRecords(byte[][] values) throws IOException {
-        FileRecords fileRecords = null;
-        if (usePMem) {
-            fileRecords = FileRecords.open(tempFile(), true, false, initSize, true, FileRecords.FileChannelType.PMEM);
-        } else {
-            fileRecords = FileRecords.open(tempFile());
-        }
-        append(fileRecords, values);
+    protected FileRecords createFileRecords(byte[][] values) throws IOException {
+        FileRecords fileRecords = FileRecords.open(tempFile());
         return fileRecords;
     }
 

@@ -1044,7 +1044,7 @@ object KafkaConfig {
    val PMemSizeDoc = s"PMem capacity. Only used if $LogChannelTypeProp == pmem"
    val LogChannelTypeDoc = "Log channel type (e.g., file, pmem)"
 
-  private val configDef = {
+  private[server] val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
     import ConfigDef.Type._
