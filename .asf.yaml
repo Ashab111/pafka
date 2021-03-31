@@ -16,13 +16,17 @@
 # under the License.
 
 notifications:
-  commits:      commits@kafka.apache.org
-  issues:       jira@kafka.apache.org
-  pullrequests: jira@kafka.apache.org
+  commits:      zhanghao@4paradigm.com
+  issues:       zhanghao@4paradigm.com
+  pullrequests: zhanghao@4paradigm.com
   jira_options: link label
 
-jenkins:
-  github_whitelist:
-    - ConcurrencyPractitioner
-    - ableegoldman
-    - cadonna
+github:
+  description: "Pafka: PMem-Accelerated Kafka"
+  labels:
+    - scala
+    - java
+    - kafka
+    - messege-queue
+    - streaming
+    - pmem

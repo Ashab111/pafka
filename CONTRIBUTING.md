@@ -1,8 +1,9 @@
-## Contributing to Kafka
+## Contributing to Pafka
 
-*Before opening a pull request*, review the [Contributing](https://kafka.apache.org/contributing.html) and [Contributing Code Changes](https://cwiki.apache.org/confluence/display/KAFKA/Contributing+Code+Changes) pages.
+Please follow the steps if you want to contribute:
 
-It lists steps that are required before creating a PR.
+1. If it is a major feature, submit the RFC on *Discussions* first.
+2. Submit a PR. Make sure it passes the CI.
 
 When you contribute code, you affirm that the contribution is your original work and that you
 license the work to the project under the project's open source license. Whether or not you
