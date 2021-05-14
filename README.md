@@ -2,7 +2,7 @@
 
 [![Slack](https://img.shields.io/badge/slack-pafka--help-blue?logo=slack)](https://join.slack.com/t/memarkworkspace/shared_invite/zt-o1wa5wqt-euKxFgyrUUrQCqJ4rE0oPw)
 [![Release](https://img.shields.io/github/v/release/4paradigm/pafka)](https://github.com/4paradigm/pafka/releases)
-[![Docker Pulls](https://img.shields.io/docker/pulls/pafka/pafka-dev)](https://hub.docker.com/repository/docker/pafka/pafka-dev)
+[![Docker Pulls](https://img.shields.io/docker/pulls/4pdopensource/pafka-dev)](https://hub.docker.com/r/4pdopensource/pafka-dev)
 [![Stars](https://img.shields.io/github/stars/4paradigm/pafka)](https://github.com/4paradigm/pafka/stargazers)
 [![Fork](https://img.shields.io/github/forks/4paradigm/pafka)](https://github.com/4paradigm/pafka/network/members)
 [![License](https://img.shields.io/github/license/4paradigm/pafka)](https://github.com/4paradigm/pafka/blob/main/LICENSE)
