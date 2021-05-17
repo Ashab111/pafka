@@ -168,18 +168,33 @@ In order to support PMem storage, we add some more config fields to the Kafka [s
 Sample config in config/server.properties is as follows:
 
     storage.pmem.path=/mnt/pmem/kafka/
-    storage.pmem.size=107374182400
-    log.pmem.pool.ratio=0.9
+    storage.pmem.size=21474836480
+    log.pmem.pool.ratio=0.6
     log.channel.type=pmem
     # log.preallocate have to set to true if pmem is used
     log.preallocate=true
 
-#### Start Kafka
+#### Start Pafka
 Follow instructions in https://kafka.apache.org/quickstart. Basically:
 
-    bin/zookeeper-server-start.sh config/zookeeper.properties
-    bin/kafka-server-start.sh config/server.properties
+    bin/zookeeper-server-start.sh config/zookeeper.properties > zk.log 2>&1 &
+    bin/kafka-server-start.sh config/server.properties > pafka.log 2>&1 &
+    
+ #### Benchmark Pafka
+ 
+ ##### Producer
+ 
+```bash
+# bin/kafka-producer-perf-test.sh --topic $TOPIC --throughput $MAX_THROUGHPUT --num-records $NUM_RECORDS --record-size $RECORD_SIZE --producer.config config/producer.properties
+bin/kafka-producer-perf-test.sh --topic test --throughput 1000000 --num-records 1000000 --record-size 1024 --producer.config config/producer.properties
+```
+ 
+ ##### Consumer
 
+```bash
+# bin/kafka-consumer-perf-test.sh --topic $TOPIC --consumer.config config/consumer.properties --bootstrap-server localhost:9092 --messages $NUM_RECORDS --show-detailed-stats --reporting-interval $REPORT_INTERVAL --timeout $TIMEOUT_IN_MS
+bin/kafka-consumer-perf-test.sh --topic test --consumer.config config/consumer.properties --bootstrap-server localhost:9092 --messages 1000000 --show-detailed-stats --reporting-interval 1000 --timeout 100000
+```
 
 ## Limitations
 
@@ -204,7 +219,7 @@ as we do not see much performance gain if we move the indexes to PMem.
 
 | Version |	Status | Features |
 |---|---|---|
-|v0.1.0|Released|- Use PMem for data storage <br /> - Significant performance boost compared with Kafka |
+|v0.1.1|Released|- Use PMem for data storage <br /> - Significant performance boost compared with Kafka |
 |v0.2.0|To be released in June/July 2021|- Layered storage with PMem and other storage medium|
 
 
