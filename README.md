@@ -41,7 +41,7 @@ The server spec is as follows:
 |---|----|
 |CPU|Intel(R) Xeon(R) Gold 6252 Processor (24 cores/48 threads) * 2|
 |Memory|376 GB|
-|Network|Mellanox ConnectX-5 100 GBps|
+|Network|Mellanox ConnectX-5 100 Gbps|
 |PMem|128 GB x 6 = 768 GB|
 
 The storage spec and performance:
