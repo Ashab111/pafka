@@ -60,3 +60,7 @@ raft/src/generated
 raft/.jqwik-database
 core/src/generated
 metadata/src/generated
+
+*.pyc
+*.log
+__pycache__

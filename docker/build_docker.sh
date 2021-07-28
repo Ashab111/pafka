@@ -14,14 +14,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 if [[ $# -lt 1 ]]; then
   echo "must specify the tag"
   exit 1
 fi
 
 tag=$1
-repo=pafka/pafka-dev
-docker build -t $repo:$tag -f Dockerfile .
+repo=4pdopensource/pafka-dev
+cache_image="$repo:latest"
+docker pull ${cache_image} || true
+docker build --cache-from ${cache_image} -t $repo:$tag -f docker/Dockerfile .
 docker tag $repo:$tag $repo:latest
 docker push $repo:$tag
 docker push $repo:latest
