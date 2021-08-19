@@ -163,7 +163,7 @@ bin/kafka-consumer-perf-test.sh --topic test --consumer.config config/consumer.p
 
 
 - Currently, only the log files are stored in PMem, while the indexes are still kept as normal files, as we do not see much performance gain if we move the indexes to PMem.
-- This current released version (`v0.1.x`) uses PMem as the only storage devices, which may limit the use for some scenarios that require a large capacity to for log storage. The next releases (`v0.2.0`) will address this issue by introducing a tiered storage strategy.
+- The current released version (`v0.1.x`) uses PMem as the only storage device, which may limit the use for some scenarios that require a large capacity for log storage. The next release (`v0.2.0`) will address this issue by introducing a tiered storage strategy.
 
 
 ## Roadmap
@@ -178,7 +178,7 @@ bin/kafka-consumer-perf-test.sh --topic test --consumer.config config/consumer.p
 Pafka is developed by MemArk (https://memark.io/en), which is a tech community focusing on leveraging modern storage architecture for system enhancement. MemArk is led by 4Paradigm (https://www.4paradigm.com/) and other sponsors (such as Intel). Please join our community for:
 
 - Chatting: For any feedback, suggestions, issues, and anything about using Pafka or other storage related topics, you can join our interactive discussion channel at **Slack** [#pafka-help](https://join.slack.com/t/memarkworkspace/shared_invite/zt-o1wa5wqt-euKxFgyrUUrQCqJ4rE0oPw)
-- Development discussion: If you would like to formally report a bug or any suggestions, please use the **GitHub Issues**; if you would like to propose a new feature, or would like to start a pull request, please use the **GitHub Discussions**, and our developers will respond promptly.
+- Development discussion: If you would like to formally report a bug or suggestion, please use the **GitHub Issues**; if you would like to propose a new feature for some discussion, or would like to start a pull request, please use the **GitHub Discussions**, and our developers will respond promptly.
 
 You can also contact the authors directly for any feedback:
 - ZHANG Hao: zhanghao@4paradigm.com
