@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.metadata.UsableBroker;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -272,6 +272,11 @@ public class BrokerHeartbeatManager {
         return unfenced;
     }
 
+    // VisibleForTesting
+    Collection<BrokerHeartbeatState> brokers() {
+        return brokers.values();
+    }
+
     /**
      * Mark a broker as fenced.
      *
@@ -414,44 +419,45 @@ public class BrokerHeartbeatManager {
     }
 
     /**
-     * Find the stale brokers which haven't heartbeated in a long time, and which need to
-     * be fenced.
+     * Check if the oldest broker to have hearbeated has already violated the
+     * sessionTimeoutNs timeout and needs to be fenced.
      *
-     * @return      A list of node IDs.
+     * @return      An Optional broker node id.
      */
-    List<Integer> findStaleBrokers() {
-        List<Integer> nodes = new ArrayList<>();
+    Optional<Integer> findOneStaleBroker() {
         BrokerHeartbeatStateIterator iterator = unfenced.iterator();
-        while (iterator.hasNext()) {
+        if (iterator.hasNext()) {
             BrokerHeartbeatState broker = iterator.next();
-            if (hasValidSession(broker)) {
-                break;
+            // The unfenced list is sorted on last contact time from each
+            // broker. If the first broker is not stale, then none is.
+            if (!hasValidSession(broker)) {
+                return Optional.of(broker.id);
             }
-            nodes.add(broker.id);
         }
-        return nodes;
+        return Optional.empty();
     }
 
     /**
      * Place replicas on unfenced brokers.
      *
+     * @param startPartition    The partition ID to start with.
      * @param numPartitions     The number of partitions to place.
      * @param numReplicas       The number of replicas for each partition.
      * @param idToRack          A function mapping broker id to broker rack.
-     * @param policy            The replica placement policy to use.
+     * @param placer            The replica placer to use.
      *
      * @return                  A list of replica lists.
      *
      * @throws InvalidReplicationFactorException    If too many replicas were requested.
      */
-    List<List<Integer>> placeReplicas(int numPartitions, short numReplicas,
+    List<List<Integer>> placeReplicas(int startPartition,
+                                      int numPartitions,
+                                      short numReplicas,
                                       Function<Integer, Optional<String>> idToRack,
-                                      ReplicaPlacementPolicy policy) {
-        // TODO: support using fenced brokers here if necessary to get to the desired
-        // number of replicas. We probably need to add a fenced boolean in UsableBroker.
+                                      ReplicaPlacer placer) {
         Iterator<UsableBroker> iterator = new UsableBrokerIterator(
-            unfenced.iterator(), idToRack);
-        return policy.createPlacement(numPartitions, numReplicas, iterator);
+            brokers.values().iterator(), idToRack);
+        return placer.place(startPartition, numPartitions, numReplicas, iterator);
     }
 
     static class UsableBrokerIterator implements Iterator<UsableBroker> {
@@ -479,7 +485,7 @@ public class BrokerHeartbeatManager {
                 result = iterator.next();
             } while (result.shuttingDown());
             Optional<String> rack = idToRack.apply(result.id());
-            next = new UsableBroker(result.id(), rack);
+            next = new UsableBroker(result.id(), rack, result.fenced());
             return true;
         }
 

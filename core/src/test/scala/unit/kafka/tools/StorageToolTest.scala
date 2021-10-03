@@ -37,6 +37,8 @@ class StorageToolTest {
     properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
     properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     properties.setProperty(KafkaConfig.NodeIdProp, "2")
+    properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9092")
+    properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
     properties
   }
 
@@ -119,7 +121,7 @@ Found problem:
 Found metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, version=1}
 
 Found problem:
-  The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for a cluster in self-managed mode.
+  The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for a cluster in KRaft mode.
 
 """, stream.toString())
     } finally Utils.delete(tempDir)
@@ -144,7 +146,7 @@ Found problem:
 Found metadata: {broker.id=1, cluster.id=26c36907-4158-4a35-919d-6534229f5241, version=0}
 
 Found problem:
-  The kafka configuration file appears to be for a cluster in self-managed mode, but the directories are formatted for legacy mode.
+  The kafka configuration file appears to be for a cluster in KRaft mode, but the directories are formatted for legacy mode.
 
 """, stream.toString())
     } finally Utils.delete(tempDir)

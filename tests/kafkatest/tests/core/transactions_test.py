@@ -108,6 +108,8 @@ class TransactionsTest(Test):
                     time.sleep(brokerSessionTimeoutSecs + gracePeriodSecs)
                 self.kafka.start_node(node)
 
+            self.kafka.await_no_under_replicated_partitions()
+
     def create_and_start_message_copier(self, input_topic, input_partition, output_topic, transactional_id, use_group_metadata):
         message_copier = TransactionalMessageCopier(
             context=self.test_context,
@@ -244,8 +246,9 @@ class TransactionsTest(Test):
     @matrix(failure_mode=["hard_bounce", "clean_bounce"],
             bounce_target=["brokers", "clients"],
             check_order=[True, False],
-            use_group_metadata=[True, False])
-    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum=quorum.zk):
+            use_group_metadata=[True, False],
+            metadata_quorum=quorum.all_non_upgrade)
+    def test_transactions(self, failure_mode, bounce_target, check_order, use_group_metadata, metadata_quorum=quorum.all):
         security_protocol = 'PLAINTEXT'
         self.kafka.security_protocol = security_protocol
         self.kafka.interbroker_security_protocol = security_protocol

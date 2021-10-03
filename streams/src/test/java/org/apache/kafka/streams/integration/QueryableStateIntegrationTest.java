@@ -37,6 +37,7 @@ import org.apache.kafka.streams.LagInfo;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -54,7 +55,6 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlySessionStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
-import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -120,6 +120,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 
 @Category({IntegrationTest.class})
+@SuppressWarnings("deprecation")
 public class QueryableStateIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(QueryableStateIntegrationTest.class);
 
@@ -226,8 +227,9 @@ public class QueryableStateIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         stringComparator = Comparator.comparing((KeyValue<String, String> o) -> o.key).thenComparing(o -> o.value);
         stringLongComparator = Comparator.comparing((KeyValue<String, Long> o) -> o.key).thenComparingLong(o -> o.value);
@@ -295,7 +297,6 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    @Deprecated // using KafkaStreams#metadataForKey
     private void verifyAllKVKeys(final List<KafkaStreams> streamsList,
                                  final KafkaStreams streams,
                                  final KafkaStreamsTest.StateListenerStub stateListener,
@@ -313,12 +314,10 @@ public class QueryableStateIntegrationTest {
             for (final String key: keys) {
                 try {
                     final KeyQueryMetadata queryMetadata = streams.queryMetadataForKey(storeName, key, serializer);
-                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, serializer);
                     if (queryMetadata == null || queryMetadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
                         noMetadataKeys.add(key);
                         continue;
                     }
-                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.activeHost()));
                     if (!pickInstanceByPort) {
                         assertThat("Should have standbys to query from", !queryMetadata.standbyHosts().isEmpty());
                     }
@@ -350,7 +349,6 @@ public class QueryableStateIntegrationTest {
         });
     }
 
-    @Deprecated // using KafkaStreams#metadataForKey
     private void verifyAllWindowedKeys(final List<KafkaStreams> streamsList,
                                        final KafkaStreams streams,
                                        final KafkaStreamsTest.StateListenerStub stateListenerStub,
@@ -370,12 +368,10 @@ public class QueryableStateIntegrationTest {
             for (final String key: keys) {
                 try {
                     final KeyQueryMetadata queryMetadata = streams.queryMetadataForKey(storeName, key, serializer);
-                    final StreamsMetadata metadata = streams.metadataForKey(storeName, key, serializer);
                     if (queryMetadata == null || queryMetadata.equals(KeyQueryMetadata.NOT_AVAILABLE)) {
                         noMetadataKeys.add(key);
                         continue;
                     }
-                    assertThat(metadata.hostInfo(), equalTo(queryMetadata.activeHost()));
                     if (pickInstanceByPort) {
                         assertThat(queryMetadata.standbyHosts().size(), equalTo(0));
                     } else {
@@ -477,8 +473,8 @@ public class QueryableStateIntegrationTest {
                 streams.store(fromNameAndType(storeName, keyValueStore()));
             assertThat(store, Matchers.notNullValue());
 
-            final InvalidStateStoreException exception = assertThrows(
-                InvalidStateStoreException.class,
+            final UnknownStateStoreException exception = assertThrows(
+                UnknownStateStoreException.class,
                 () -> streams.store(fromNameAndType("no-table", keyValueStore()))
             );
             assertThat(
@@ -848,6 +844,64 @@ public class QueryableStateIntegrationTest {
 
         for (final KeyValue<String, String> batchEntry : batch1) {
             assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key));
+        }
+
+        final KeyValueIterator<String, Long> range = myMapStore.range("hello", "kafka");
+        while (range.hasNext()) {
+            System.out.println(range.next());
+        }
+    }
+
+    @Test
+    public void shouldBeAbleToQueryKeysWithGivenPrefix() throws Exception {
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        final StreamsBuilder builder = new StreamsBuilder();
+        final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
+        final Set<KeyValue<String, String>> batch1 = new HashSet<>(
+            Arrays.asList(
+                new KeyValue<>(keys[0], "1"),
+                new KeyValue<>(keys[1], "1"),
+                new KeyValue<>(keys[2], "3"),
+                new KeyValue<>(keys[3], "5"),
+                new KeyValue<>(keys[4], "2"))
+        );
+
+        final List<KeyValue<String, Long>> expectedPrefixScanResult = Arrays.asList(
+            new KeyValue<>(keys[3], 5L),
+            new KeyValue<>(keys[1], 1L)
+        );
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+            streamOne,
+            batch1,
+            TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(),
+                StringSerializer.class,
+                StringSerializer.class,
+                new Properties()),
+            mockTime);
+
+        final KTable<String, String> t1 = builder.table(streamOne);
+        t1
+            .mapValues(
+                (ValueMapper<String, Long>) Long::valueOf,
+                Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("queryMapValues").withValueSerde(Serdes.Long()))
+            .toStream()
+            .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
+
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        startKafkaStreamsAndWaitForRunningState(kafkaStreams);
+
+        waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
+
+        final ReadOnlyKeyValueStore<String, Long> myMapStore =
+            IntegrationTestUtils.getStore("queryMapValues", kafkaStreams, keyValueStore());
+
+        int index = 0;
+        final KeyValueIterator<String, Long> range = myMapStore.prefixScan("go", Serdes.String().serializer());
+        while (range.hasNext()) {
+            assertEquals(expectedPrefixScanResult.get(index++), range.next());
         }
     }
 

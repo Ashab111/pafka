@@ -64,6 +64,9 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_1;
+
 import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -73,6 +76,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation") // Old PAPI. Needs to be migrated.
 public class StreamsBuilderTest {
 
     private static final String STREAM_TOPIC = "stream-topic";
@@ -458,7 +462,7 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(false));
         assertThat(
-            internalTopologyBuilder.topicGroups().get(0).nonSourceChangelogTopics().isEmpty(),
+            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).nonSourceChangelogTopics().isEmpty(),
             equalTo(true));
     }
 
@@ -486,7 +490,7 @@ public class StreamsBuilderTest {
             equalTo(true)
         );
         assertThat(
-            internalTopologyBuilder.topicGroups().get(1).stateChangelogTopics.keySet(),
+            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_1).stateChangelogTopics.keySet(),
             equalTo(Collections.singleton("appId-store-changelog"))
         );
     }
@@ -509,7 +513,7 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.stateStores().get("store").loggingEnabled(),
             equalTo(true));
         assertThat(
-            internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.keySet(),
+            internalTopologyBuilder.topicGroups().get(SUBTOPOLOGY_0).stateChangelogTopics.keySet(),
             equalTo(Collections.singleton("appId-store-changelog")));
     }
 
@@ -703,16 +707,54 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldNotAddThirdStateStoreIfStreamStreamJoinFixIsDisabledViaOldApi() {
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        streamOne.leftJoin(
+                streamTwo,
+                (value1, value2) -> value1,
+                JoinWindows.of(Duration.ofHours(1)),
+                StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                        .withName(STREAM_OPERATION_NAME)
+        );
+
+        final Properties properties = new Properties();
+        builder.build(properties);
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertNamesForStateStore(topology.stateStores(),
+                STREAM_OPERATION_NAME + "-this-join-store",
+                STREAM_OPERATION_NAME + "-outer-other-join-store"
+        );
+        assertNamesForOperation(topology,
+                "KSTREAM-SOURCE-0000000000",
+                "KSTREAM-SOURCE-0000000001",
+                STREAM_OPERATION_NAME + "-this-windowed",
+                STREAM_OPERATION_NAME + "-other-windowed",
+                STREAM_OPERATION_NAME + "-this-join",
+                STREAM_OPERATION_NAME + "-outer-other-join",
+                STREAM_OPERATION_NAME + "-merge");
+    }
+
+    @Test
     public void shouldUseSpecifiedNameForLeftJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.leftJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME).withName(STREAM_OPERATION_NAME));
+        streamOne.leftJoin(
+            streamTwo,
+            (value1, value2) -> value1,
+            JoinWindows.of(Duration.ofHours(1)).grace(Duration.ZERO),
+            StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                .withName(STREAM_OPERATION_NAME)
+        );
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForStateStore(topology.stateStores(),
-                                 STREAM_OPERATION_NAME + "-this-join-store", STREAM_OPERATION_NAME + "-outer-other-join-store"
+            STREAM_OPERATION_NAME + "-this-join-store",
+            STREAM_OPERATION_NAME + "-outer-other-join-store"
         );
         assertNamesForOperation(topology,
                                 "KSTREAM-SOURCE-0000000000",
@@ -725,12 +767,17 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @Deprecated
     public void shouldUseGeneratedStoreNamesForLeftJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.leftJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.leftJoin(
+            streamTwo,
+            (value1, value2) -> value1,
+            JoinWindows.of(Duration.ofHours(1)).grace(Duration.ZERO),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+                .withName(STREAM_OPERATION_NAME)
+        );
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
@@ -772,12 +819,11 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @Deprecated
     public void shouldUseGeneratedNameForJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.join(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.join(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String()).withName(STREAM_OPERATION_NAME));
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
@@ -800,7 +846,13 @@ public class StreamsBuilderTest {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.outerJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME).withName(STREAM_OPERATION_NAME));
+        streamOne.outerJoin(
+            streamTwo,
+            (value1, value2) -> value1,
+            JoinWindows.of(Duration.ofHours(1)).grace(Duration.ZERO),
+            StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                .withName(STREAM_OPERATION_NAME)
+        );
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertNamesForStateStore(topology.stateStores(),
@@ -818,12 +870,17 @@ public class StreamsBuilderTest {
     }
 
     @Test
-    @Deprecated
     public void shouldUseGeneratedStoreNamesForOuterJoinOperationBetweenKStreamAndKStream() {
         final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
         final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
 
-        streamOne.outerJoin(streamTwo, (value1, value2) -> value1, JoinWindows.of(Duration.ofHours(1)), Joined.as(STREAM_OPERATION_NAME));
+        streamOne.outerJoin(
+            streamTwo,
+            (value1, value2) -> value1,
+            JoinWindows.of(Duration.ofHours(1)).grace(Duration.ZERO),
+            StreamJoined.with(Serdes.String(), Serdes.String(), Serdes.String())
+                .withName(STREAM_OPERATION_NAME)
+        );
         builder.build();
 
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();

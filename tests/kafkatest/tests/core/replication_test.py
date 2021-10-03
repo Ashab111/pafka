@@ -65,7 +65,7 @@ def hard_bounce(test, broker_type):
 
         # Since this is a hard kill, we need to make sure the process is down and that
         # zookeeper has registered the loss by expiring the broker's session timeout.
-        # Or, for a Raft-based quorum, we simply wait at least 18 seconds (the default for broker.session.timeout.ms)
+        # Or, for a KRaft quorum, we simply wait at least 18 seconds (the default for broker.session.timeout.ms)
 
         gracePeriodSecs = 5
         if test.zk:
@@ -122,7 +122,8 @@ class ReplicationTest(EndToEndTest):
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader"],
             security_protocol=["PLAINTEXT"],
-            enable_idempotence=[True])
+            enable_idempotence=[True],
+            metadata_quorum=quorum.all_non_upgrade)
     @matrix(failure_mode=["clean_shutdown", "hard_shutdown", "clean_bounce", "hard_bounce"],
             broker_type=["leader"],
             security_protocol=["PLAINTEXT", "SASL_SSL"],
@@ -148,7 +149,7 @@ class ReplicationTest(EndToEndTest):
         These tests verify that replication provides simple durability guarantees by checking that data acked by
         brokers is still available for consumption in the face of various failure scenarios.
 
-        Setup: 1 zk/Raft-based controller, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
+        Setup: 1 zk/KRaft controller, 3 kafka nodes, 1 topic with partitions=3, replication-factor=3, and min.insync.replicas=2
 
             - Produce messages in the background
             - Consume messages in the background
@@ -157,8 +158,8 @@ class ReplicationTest(EndToEndTest):
             - Validate that every acked message was consumed
         """
 
-        if failure_mode == "controller" and metadata_quorum != quorum.zk:
-            raise Exception("There is no controller broker when using a Raft-based metadata quorum")
+        if broker_type == "controller" and metadata_quorum != quorum.zk:
+            raise Exception("There is no controller broker when using KRaft metadata quorum")
         self.create_zookeeper_if_necessary()
         if self.zk:
             self.zk.start()

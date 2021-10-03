@@ -57,12 +57,9 @@ clients/src/generated
 clients/src/generated-test
 jmh-benchmarks/generated
 jmh-benchmarks/src/main/generated
-streams/src/generated
-raft/src/generated
 raft/.jqwik-database
-core/src/generated
-metadata/src/generated
-
 *.pyc
 *.log
 __pycache__
+**/src/generated
+**/src/generated-test
