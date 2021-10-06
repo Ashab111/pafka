@@ -33,7 +33,6 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.Arrays;
 import java.io.FileNotFoundException;
-import java.io.IOException;
 
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import org.apache.kafka.clients.producer.Callback;
@@ -71,6 +70,7 @@ public class ProducerPerformance {
             List<String> producerProps = res.getList("producerConfig");
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
+            String payloadType = res.getString("payloadType");
             String transactionalId = res.getString("transactionalId");
             Integer reportingInterval = res.getInt("reportingInterval");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
@@ -97,6 +97,7 @@ public class ProducerPerformance {
             byte[] payload = null;
             if (recordSize != null) {
                 payload = new byte[recordSize];
+                Arrays.fill(payload, (byte) 1);
             }
             Random random = new Random(0);
             ProducerRecord<byte[], byte[]> record;
@@ -113,7 +114,9 @@ public class ProducerPerformance {
             long sentSoFar = 0;
             for (long i = 0; i < numRecords; i++) {
 
-                payload = generateRandomPayload(recordSize, payloadByteList, payload, random);
+                if (payloadFilePath != null || payloadType.compareToIgnoreCase("random") == 0) {
+                    payload = generateRandomPayload(recordSize, payloadByteList, payload, random);
+                }
 
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
@@ -300,6 +303,15 @@ public class ProducerPerformance {
                 .help("file to read the message payloads from. This works only for UTF-8 encoded text files. " +
                         "Payloads will be read from this file and a payload will be randomly selected when sending messages. " +
                         "Note that you must provide exactly one of --record-size or --payload-file.");
+
+        parser.addArgument("--payload-type")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("PAYLOAD-TYPE")
+                .dest("payloadType")
+                .setDefault("fix")
+                .help("use fix or random payload");
 
         parser.addArgument("--payload-delimiter")
                 .action(store())
