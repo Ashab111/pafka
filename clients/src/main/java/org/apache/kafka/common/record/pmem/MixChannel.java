@@ -240,7 +240,7 @@ public class MixChannel extends FileChannel {
                     if (PMemChannel.exists(file)) {
                         log.error(file + " exist, but no info from metaStore.");
                         PMemChannel ch = (PMemChannel) PMemChannel.open(file, initFileSize, preallocate, mutable);
-                        ch.delete();
+                        ch.delete(false);
                     }
                     break;
                 default:
