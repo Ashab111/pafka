@@ -66,19 +66,23 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
     @Override
     public String getDisplayName(int invocationIndex) {
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
-            .map(Object::toString)
-            .collect(Collectors.joining(", "));
-        return String.format("[Quorum %d] %s", invocationIndex, clusterDesc);
+                .map(Object::toString)
+                .collect(Collectors.joining(", "));
+        return String.format("[%d] Type=Raft, %s", invocationIndex, clusterDesc);
     }
 
     @Override
     public List<Extension> getAdditionalExtensions() {
         return Arrays.asList(
             (BeforeTestExecutionCallback) context -> {
-                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(
-                    new TestKitNodes.Builder().
-                        setNumKip500BrokerNodes(clusterConfig.numBrokers()).
-                        setNumControllerNodes(clusterConfig.numControllers()).build());
+                TestKitNodes nodes = new TestKitNodes.Builder().
+                        setNumBrokerNodes(clusterConfig.numBrokers()).
+                        setNumControllerNodes(clusterConfig.numControllers()).build();
+                nodes.brokerNodes().forEach((brokerId, brokerNode) -> {
+                    clusterConfig.brokerServerProperties(brokerId).forEach(
+                            (key, value) -> brokerNode.propertyOverrides().put(key.toString(), value.toString()));
+                });
+                KafkaClusterTestKit.Builder builder = new KafkaClusterTestKit.Builder(nodes);
 
                 // Copy properties into the TestKit builder
                 clusterConfig.serverProperties().forEach((key, value) -> builder.setConfigProp(key.toString(), value.toString()));
@@ -88,7 +92,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                 cluster.format();
                 cluster.startup();
                 kafka.utils.TestUtils.waitUntilTrue(
-                    () -> cluster.brokers().get(0).currentState() == BrokerState.RUNNING,
+                    () -> cluster.brokers().get(0).brokerState() == BrokerState.RUNNING,
                     () -> "Broker never made it to RUNNING state.",
                     org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS,
                     100L);
@@ -191,6 +195,11 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
                     throw new RuntimeException("Failed to stop Raft server", e);
                 }
             }
+        }
+
+        @Override
+        public void rollingBrokerRestart() {
+            throw new UnsupportedOperationException("Restarting Raft servers is not yet supported.");
         }
     }
 }

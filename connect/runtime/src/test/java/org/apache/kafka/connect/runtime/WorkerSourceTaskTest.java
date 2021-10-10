@@ -190,10 +190,6 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Map<String, String> props = new HashMap<>();
         props.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
         props.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        props.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        props.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        props.put("internal.key.converter.schemas.enable", "false");
-        props.put("internal.value.converter.schemas.enable", "false");
         props.put("offset.storage.file.filename", "/tmp/connect.offsets");
         props.put(TOPIC_CREATION_ENABLE_CONFIG, String.valueOf(enableTopicCreation));
         return props;
@@ -392,7 +388,100 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         Future<?> taskFuture = executor.submit(workerTask);
 
         assertTrue(awaitLatch(pollLatch));
+        //Failure in poll should trigger automatic stop of the worker
+        assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
+        assertPollMetrics(0);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testFailureInPollAfterCancel() throws Exception {
+        createWorkerTask();
+
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(TASK_PROPS);
+        EasyMock.expectLastCall();
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
+
+        final CountDownLatch pollLatch = new CountDownLatch(1);
+        final CountDownLatch workerCancelLatch = new CountDownLatch(1);
+        final RuntimeException exception = new RuntimeException();
+        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
+            pollLatch.countDown();
+            assertTrue(awaitLatch(workerCancelLatch));
+            throw exception;
+        });
+
+        offsetReader.close();
+        PowerMock.expectLastCall();
+
+        producer.close(Duration.ZERO);
+        PowerMock.expectLastCall();
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        expectClose();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
+        workerTask.cancel();
+        workerCancelLatch.countDown();
+        assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
+        assertPollMetrics(0);
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testFailureInPollAfterStop() throws Exception {
+        createWorkerTask();
+
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(TASK_PROPS);
+        EasyMock.expectLastCall();
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
+
+        final CountDownLatch pollLatch = new CountDownLatch(1);
+        final CountDownLatch workerStopLatch = new CountDownLatch(1);
+        final RuntimeException exception = new RuntimeException();
+        EasyMock.expect(sourceTask.poll()).andAnswer(() -> {
+            pollLatch.countDown();
+            assertTrue(awaitLatch(workerStopLatch));
+            throw exception;
+        });
+
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        expectClose();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(pollLatch));
         workerTask.stop();
+        workerStopLatch.countDown();
         assertTrue(workerTask.awaitStop(1000));
 
         taskFuture.get();
@@ -1342,7 +1431,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                 for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
                     if (sendSuccess) {
                         cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
-                            0L, 0L, 0, 0), null);
+                            0L, 0, 0), null);
                     } else {
                         cb.onCompletion(null, new TopicAuthorizationException("foo"));
                     }
