@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.record.pmem;
 
+import org.apache.kafka.common.record.pmem.UnitedStorage.SelectMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -113,7 +114,8 @@ public class MixChannel extends FileChannel {
     private static PMemMigrator migrator = null;
     private final static Object GLOBAL_LOCK = new Object();
     private static Stat highStat = new Stat();
-    private static String lowBasePath = null;
+    private static UnitedStorage lowStorage = null;
+    private static UnitedStorage highStorage = null;
 
     private volatile Mode mode = defaultMode;
     private Status status = Status.INIT;
@@ -140,35 +142,19 @@ public class MixChannel extends FileChannel {
         return defaultMode;
     }
 
-    public static void init(String highPath, String lowPath, long capacity, double threshold, int migrateThreads) {
-        File highBaseFile = new File(highPath);
-        if (!highBaseFile.exists()) {
-            if (!highBaseFile.mkdirs()) {
-                log.error("Create directory " + highBaseFile + " failed");
-            }
-        }
+    public static void init(String highPaths, String lowPaths, String capacities, double threshold, int migrateThreads) {
+        highStorage = new UnitedStorage(highPaths, capacities);
+        long totalCapacity = highStorage.capacity();
+        highStat.setCapacity(totalCapacity);
+        log.info(defaultMode + " capacity is set to " + totalCapacity);
 
-        File lowBaseFile = new File(lowPath);
-        if (!lowBaseFile.exists()) {
-            if (!lowBaseFile.mkdirs()) {
-                log.error("Create directory " + lowBaseFile + " failed");
-            }
-        }
+        lowStorage = new UnitedStorage(lowPaths, SelectMode.SYS_FREE);
 
-        metaStore = new RocksdbMetaStore(highPath + "/.meta");
-        lowBasePath = lowPath;
-
-        // use all the storage space if capacity is configured to -1
-        if (capacity == -1) {
-            File file = new File(highPath);
-            capacity = file.getTotalSpace();
-        }
-        highStat.setCapacity(capacity);
-        log.info(defaultMode + " capacity is set to " + capacity);
+        metaStore = new RocksdbMetaStore(highPaths.split(",")[0] + "/.meta");
 
         // start migration background threads
         if (threshold != -1) {
-            migrator = new PMemMigrator(migrateThreads, capacity, threshold);
+            migrator = new PMemMigrator(migrateThreads, totalCapacity, threshold);
             migrator.start();
         } else {
             log.info("Disable Migrator");
@@ -383,12 +369,7 @@ public class MixChannel extends FileChannel {
                     ((PMemChannel) oldChannel).delete(false);
                     break;
                 case HDD:
-                    if (path.startsWith(lowBasePath)) {
-                        RandomAccessFile randomAccessFile = new RandomAccessFile(path.toFile(), "rw");
-                        randomAccessFile.setLength(0);
-                    } else {
-                        deleteFileChannel(path);
-                    }
+                    deleteFileChannel(path);
                     break;
                 default:
                     log.error("Not support " + oldMode);
@@ -687,27 +668,34 @@ public class MixChannel extends FileChannel {
     }
 
     static private FileChannel openFileChannel(Path file, long initFileSize, boolean preallocate, boolean mutable) throws IOException {
+        Path absPath = null;
         String rPath = toRelativePath(file);
-        Path realPath = new File(lowBasePath + "/" + rPath).toPath();
+
+        if (lowStorage.containsAbsolute(file.toString())) {
+            absPath = file;
+        } else {
+            absPath = new File(lowStorage.toAbsolute(rPath)).toPath();
+        }
+
         FileChannel ch = null;
         if (mutable) {
-            boolean fileAlreadyExists = realPath.toFile().exists();
+            boolean fileAlreadyExists = absPath.toFile().exists();
             if (fileAlreadyExists || !preallocate) {
-                return FileChannel.open(realPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
+                return FileChannel.open(absPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
                         StandardOpenOption.WRITE);
             } else {
-                Path parent = realPath.getParent();
+                Path parent = absPath.getParent();
                 if (parent != null && !parent.toFile().exists()) {
                     if (!parent.toFile().mkdirs()) {
                         log.error("Create directory " + parent + " failed");
                     }
                 }
-                RandomAccessFile randomAccessFile = new RandomAccessFile(realPath.toString(), "rw");
+                RandomAccessFile randomAccessFile = new RandomAccessFile(absPath.toString(), "rw");
                 randomAccessFile.setLength(initFileSize);
                 ch = randomAccessFile.getChannel();
             }
         } else {
-            ch = FileChannel.open(realPath);
+            ch = FileChannel.open(absPath);
         }
 
         // create an empty log file as Kafka will check its existence
@@ -724,15 +712,15 @@ public class MixChannel extends FileChannel {
     }
 
     static private void deleteFileChannel(Path file) throws IOException {
-        String rPath = toRelativePath(file);
-        rPath = lowBasePath + "/" + rPath;
-        Path lPath = new File(rPath).toPath();
-        Files.deleteIfExists(lPath);
-
-        if (lPath.compareTo(file) == 0) {
-            if (!file.toFile().createNewFile()) {
-                log.debug(file + " already exits");
-            }
+        if (lowStorage.containsAbsolute(file.toString())) {
+            RandomAccessFile randomAccessFile = new RandomAccessFile(file.toFile(), "rw");
+            randomAccessFile.setLength(0);
+            return;
+        } else {
+            String rPath = toRelativePath(file);
+            String absPath = lowStorage.toAbsolute(rPath);
+            Path lPath = new File(absPath).toPath();
+            Files.deleteIfExists(lPath);
         }
     }
 }
