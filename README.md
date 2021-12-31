@@ -15,7 +15,7 @@ Pafka: Persistent Memory (PMem) Accelerated Kafka
 
 Pafka is an evolved version of Apache Kafka developed by [MemArk](https://memark.io/en). Kafka is an open-source distributed event streaming/message queue system for handling real-time data feeds efficiently and reliably. However, its performance (e.g., throughput and latency) is constrained by slow external storage. Pafka enhances Kafka based on tiered storage architecture, which is usually equipped with high-performance SSD or Intel® Optane™ Persistent Memory (PMem). With the careful design of data migration algorithms, it improves overall persistence performance with low cost. For example, it can well support the scenario that high data production rate is repeated after an interval of time (e.g., special discount is released every one hour from a shopping website); it is also capable of improving the overall performance when high throughput is required over a long period. 
 
-Please refer to our latest blog for Pafka benchmark and use cases :point_right: [English](https://memark.medium.com/pafka-0-2-0-optimized-kafka-based-on-tiered-storage-architecture-1261078ef46b) ([中文](https://memark.io/index.php/2021/09/24/pafka_020/))
+Please refer to our latest blog for Pafka benchmark and use cases :point_right: [English](https://memark.medium.com/pafka-0-3-0-release-low-cost-solution-to-peak-traffic-scenario-in-kafka-6eb073de7798) ([中文](https://memark.io/index.php/2021/12/29/pafka-0-3-0/))
 
 ## 2. Architecture
 
@@ -35,8 +35,6 @@ The easiest way to try Pafka is to use the docker image: https://hub.docker.com/
 ```
 docker run -it 4pdopensource/pafka-dev bash
 ```
-
-where $YOUR_PMEM_PATH is the mount point of PMem (DAX file system) in the host system.
 
 If you use the docker image, you can skip the following `Compile` step.
 
@@ -99,11 +97,11 @@ Sample config in config/server.properties is as follows:
 
     # log file channel type; Options: "file", "pmem", "tiered".
     # if "file": use normal file as vanilla Kafka does. Following configs are not applicable.
-    log.channel.type=file
+    log.channel.type=tiered
     # the storage types for each layers (separated by ,)
-    storage.tiers.types=PMEM,HDD
+    storage.tiers.types=NVME,HDD
     # first-layer storage paths (separated by ,)
-    storage.tiers.first.paths=/pmem
+    storage.tiers.first.paths=/nvme
     # first-layer storage capacities in bytes (separated by ,); -1 means use all the space
     storage.tiers.first.sizes=-1
     # second-layer storage paths (separated by ,)
