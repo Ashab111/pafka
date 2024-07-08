@@ -1518,15 +1518,13 @@ public class KafkaAdminClient extends AdminClient {
      * the initial error back to the caller if the request timed out.
      */
     private static <K, V> void maybeCompleteQuotaExceededException(
-            boolean shouldRetryOnQuotaViolation,
-            Throwable throwable,
             Map<K, KafkaFutureImpl<V>> futures,
             Map<K, ThrottlingQuotaExceededException> quotaExceededExceptions,
-            int throttleTimeDelta) {
-        if (shouldRetryOnQuotaViolation && throwable instanceof TimeoutException) {
+            QEEobj qeeObj) {
+        if (qeeObj.shouldRetryOnQuotaViolation && qeeObj.throwable instanceof TimeoutException) {
             quotaExceededExceptions.forEach((key, value) -> futures.get(key).completeExceptionally(
                 new ThrottlingQuotaExceededException(
-                    Math.max(0, value.throttleTimeMs() - throttleTimeDelta),
+                    Math.max(0, value.throttleTimeMs() - qeeObj.throttleTimeDelta),
                     value.getMessage())));
         }
     }
@@ -1580,7 +1578,7 @@ public class KafkaAdminClient extends AdminClient {
                 // Handle server responses for particular topics.
                 final CreateTopicsResponse response = (CreateTopicsResponse) abstractResponse;
                 final CreatableTopicCollection retryTopics = new CreatableTopicCollection();
-                final Map<String, ThrottlingQuotaExceededException> retryTopicQuotaExceededExceptions = new HashMap<>();
+                final Map<String, ThrottlingQuotaExceededException> retryTQExceededException = new HashMap<>();
                 for (CreatableTopicResult result : response.data().topics()) {
                     KafkaFutureImpl<TopicMetadataAndConfig> future = futures.get(result.name());
                     if (future == null) {
@@ -1593,7 +1591,7 @@ public class KafkaAdminClient extends AdminClient {
                                     response.throttleTimeMs(), error.messageWithFallback());
                                 if (options.shouldRetryOnQuotaViolation()) {
                                     retryTopics.add(topics.find(result.name()).duplicate());
-                                    retryTopicQuotaExceededExceptions.put(result.name(), quotaExceededException);
+                                    retryTQExceededException.put(result.name(), quotaExceededException);
                                 } else {
                                     future.completeExceptionally(quotaExceededException);
                                 }
@@ -1629,7 +1627,7 @@ public class KafkaAdminClient extends AdminClient {
                 } else {
                     final long now = time.milliseconds();
                     final Call call = getCreateTopicsCall(options, futures, retryTopics,
-                        retryTopicQuotaExceededExceptions, now, deadline);
+                        retryTQExceededException, now, deadline);
                     runnable.call(call, now);
                 }
             }
@@ -1650,8 +1648,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
                 // the initial error back to the caller if the request timed out.
-                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
-                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
+                QEEobj queeObj = new QEEobj(options.shouldRetryOnQuotaViolation(), throwable, (int) (time.milliseconds() - now));
+                maybeCompleteQuotaExceededException(futures, quotaExceededExceptions, queeObj);
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
@@ -1783,8 +1781,9 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
                 // the initial error back to the caller if the request timed out.
-                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
-                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
+                QEEobj queeObj = new QEEobj(options.shouldRetryOnQuotaViolation(), throwable, (int) (time.milliseconds() - now));
+                maybeCompleteQuotaExceededException(
+                    futures, quotaExceededExceptions, queeObj);
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
@@ -1856,8 +1855,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
                 // the initial error back to the caller if the request timed out.
-                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
-                        throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
+                QEEobj queeObj = new QEEobj(options.shouldRetryOnQuotaViolation(), throwable, (int) (time.milliseconds() - now));
+                maybeCompleteQuotaExceededException(futures, quotaExceededExceptions, queeObj);
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }
@@ -2805,8 +2804,8 @@ public class KafkaAdminClient extends AdminClient {
             void handleFailure(Throwable throwable) {
                 // If there were any topics retries due to a quota exceeded exception, we propagate
                 // the initial error back to the caller if the request timed out.
-                maybeCompleteQuotaExceededException(options.shouldRetryOnQuotaViolation(),
-                    throwable, futures, quotaExceededExceptions, (int) (time.milliseconds() - now));
+                QEEobj queeObj = new QEEobj(options.shouldRetryOnQuotaViolation(), throwable, (int) (time.milliseconds() - now));
+                maybeCompleteQuotaExceededException(futures, quotaExceededExceptions, queeObj);
                 // Fail all the other remaining futures
                 completeAllExceptionally(futures.values(), throwable);
             }

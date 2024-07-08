@@ -553,7 +553,92 @@ public class JsonConverter implements Converter, HeaderConverter {
     private JsonNode convertToJsonWithoutEnvelope(Schema schema, Object value) {
         return convertToJson(schema, value);
     }
+    private JsonNode evalMap(Schema schema, Map<?, ?> map) {
+        boolean objectMode;
+        if (schema == null) {
+            objectMode = true;
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                if (!(entry.getKey() instanceof String)) {
+                    objectMode = false;
+                    break;
+                }
+            }
+        } else {
+            objectMode = schema.keySchema().type() == Schema.Type.STRING;
+        }
+        ObjectNode obj = null;
+        ArrayNode list = null;
+        if (objectMode)
+            obj = JSON_NODE_FACTORY.objectNode();
+        else
+            list = JSON_NODE_FACTORY.arrayNode();
+        for (Map.Entry<?, ?> entry : map.entrySet()) {
+            Schema keySchema = schema == null ? null : schema.keySchema();
+            Schema valueSchema = schema == null ? null : schema.valueSchema();
+            JsonNode mapKey = convertToJson(keySchema, entry.getKey());
+            JsonNode mapValue = convertToJson(valueSchema, entry.getValue());
 
+            if (objectMode)
+                obj.set(mapKey.asText(), mapValue);
+            else
+                list.add(JSON_NODE_FACTORY.arrayNode().add(mapKey).add(mapValue));
+        }
+        return objectMode ? obj : list;
+    }
+    private JsonNode evaluateSwitch(Schema.Type schemaType,  Object value, Schema schema) {
+        switch (schemaType) {
+            case INT8:
+                return JSON_NODE_FACTORY.numberNode((Byte) value);
+            case INT16:
+                return JSON_NODE_FACTORY.numberNode((Short) value);
+            case INT32:
+                return JSON_NODE_FACTORY.numberNode((Integer) value);
+            case INT64:
+                return JSON_NODE_FACTORY.numberNode((Long) value);
+            case FLOAT32:
+                return JSON_NODE_FACTORY.numberNode((Float) value);
+            case FLOAT64:
+                return JSON_NODE_FACTORY.numberNode((Double) value);
+            case BOOLEAN:
+                return JSON_NODE_FACTORY.booleanNode((Boolean) value);
+            case STRING:
+                CharSequence charSeq = (CharSequence) value;
+                return JSON_NODE_FACTORY.textNode(charSeq.toString());
+            case BYTES:
+                if (value instanceof byte[])
+                    return JSON_NODE_FACTORY.binaryNode((byte[]) value);
+                else if (value instanceof ByteBuffer)
+                    return JSON_NODE_FACTORY.binaryNode(((ByteBuffer) value).array());
+                else
+                    throw new DataException("Invalid type for bytes type: " + value.getClass());
+            case ARRAY: {
+                Collection<?> collection = (Collection<?>) value;
+                ArrayNode list = JSON_NODE_FACTORY.arrayNode();
+                for (Object elem : collection) {
+                    Schema valueSchema = schema == null ? null : schema.valueSchema();
+                    JsonNode fieldValue = convertToJson(valueSchema, elem);
+                    list.add(fieldValue);
+                }
+                return list;
+            }
+            case MAP: {
+                Map<?, ?> map = (Map<?, ?>) value;
+                // If true, using string keys and JSON object; if false, using non-string keys and Array-encoding
+                return evalMap(schema, map);
+            }
+            case STRUCT: {
+                Struct struct = (Struct) value;
+                if (!struct.schema().equals(schema))
+                    throw new DataException("Mismatching schema.");
+                ObjectNode obj = JSON_NODE_FACTORY.objectNode();
+                for (Field field : schema.fields()) {
+                    obj.set(field.name(), convertToJson(field.schema(), struct.get(field)));
+                }
+                return obj;
+            }
+        }
+        throw new DataException("Couldn't convert " + value + " to JSON.");
+    }
     /**
      * Convert this object, in the org.apache.kafka.connect.data format, into a JSON object, returning both the schema
      * and the converted object.
@@ -584,88 +669,7 @@ public class JsonConverter implements Converter, HeaderConverter {
             } else {
                 schemaType = schema.type();
             }
-            switch (schemaType) {
-                case INT8:
-                    return JSON_NODE_FACTORY.numberNode((Byte) value);
-                case INT16:
-                    return JSON_NODE_FACTORY.numberNode((Short) value);
-                case INT32:
-                    return JSON_NODE_FACTORY.numberNode((Integer) value);
-                case INT64:
-                    return JSON_NODE_FACTORY.numberNode((Long) value);
-                case FLOAT32:
-                    return JSON_NODE_FACTORY.numberNode((Float) value);
-                case FLOAT64:
-                    return JSON_NODE_FACTORY.numberNode((Double) value);
-                case BOOLEAN:
-                    return JSON_NODE_FACTORY.booleanNode((Boolean) value);
-                case STRING:
-                    CharSequence charSeq = (CharSequence) value;
-                    return JSON_NODE_FACTORY.textNode(charSeq.toString());
-                case BYTES:
-                    if (value instanceof byte[])
-                        return JSON_NODE_FACTORY.binaryNode((byte[]) value);
-                    else if (value instanceof ByteBuffer)
-                        return JSON_NODE_FACTORY.binaryNode(((ByteBuffer) value).array());
-                    else
-                        throw new DataException("Invalid type for bytes type: " + value.getClass());
-                case ARRAY: {
-                    Collection<?> collection = (Collection<?>) value;
-                    ArrayNode list = JSON_NODE_FACTORY.arrayNode();
-                    for (Object elem : collection) {
-                        Schema valueSchema = schema == null ? null : schema.valueSchema();
-                        JsonNode fieldValue = convertToJson(valueSchema, elem);
-                        list.add(fieldValue);
-                    }
-                    return list;
-                }
-                case MAP: {
-                    Map<?, ?> map = (Map<?, ?>) value;
-                    // If true, using string keys and JSON object; if false, using non-string keys and Array-encoding
-                    boolean objectMode;
-                    if (schema == null) {
-                        objectMode = true;
-                        for (Map.Entry<?, ?> entry : map.entrySet()) {
-                            if (!(entry.getKey() instanceof String)) {
-                                objectMode = false;
-                                break;
-                            }
-                        }
-                    } else {
-                        objectMode = schema.keySchema().type() == Schema.Type.STRING;
-                    }
-                    ObjectNode obj = null;
-                    ArrayNode list = null;
-                    if (objectMode)
-                        obj = JSON_NODE_FACTORY.objectNode();
-                    else
-                        list = JSON_NODE_FACTORY.arrayNode();
-                    for (Map.Entry<?, ?> entry : map.entrySet()) {
-                        Schema keySchema = schema == null ? null : schema.keySchema();
-                        Schema valueSchema = schema == null ? null : schema.valueSchema();
-                        JsonNode mapKey = convertToJson(keySchema, entry.getKey());
-                        JsonNode mapValue = convertToJson(valueSchema, entry.getValue());
-
-                        if (objectMode)
-                            obj.set(mapKey.asText(), mapValue);
-                        else
-                            list.add(JSON_NODE_FACTORY.arrayNode().add(mapKey).add(mapValue));
-                    }
-                    return objectMode ? obj : list;
-                }
-                case STRUCT: {
-                    Struct struct = (Struct) value;
-                    if (!struct.schema().equals(schema))
-                        throw new DataException("Mismatching schema.");
-                    ObjectNode obj = JSON_NODE_FACTORY.objectNode();
-                    for (Field field : schema.fields()) {
-                        obj.set(field.name(), convertToJson(field.schema(), struct.get(field)));
-                    }
-                    return obj;
-                }
-            }
-
-            throw new DataException("Couldn't convert " + value + " to JSON.");
+            return evaluateSwitch(schemaType, value, schema);
         } catch (ClassCastException e) {
             String schemaTypeStr = (schema != null) ? schema.type().toString() : "unknown schema";
             throw new DataException("Invalid type for " + schemaTypeStr + ": " + value.getClass());
