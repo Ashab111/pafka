@@ -22,40 +22,15 @@ import java.io.File;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-public class UnitedStorageExtension extends UnitedStorage {
-    public UnitedStorageExtension(String dirs, SelectMode mode) {
-        super(dirs, mode);
-    }
-
-    public UnitedStorageExtension(String dirs, String caps) {
-        super(dirs, caps);
-    }
-
-    public UnitedStorageExtension(String dirs, String caps, SelectMode mode) {
-        super(dirs, caps, mode);
-    }
-
-    public UnitedStorageExtension(String[] dirs, long[] capacities) {
-        super(dirs, capacities);
-    }
-
-    public UnitedStorageExtension(String[] dirs, long[] capacities, SelectMode mode) {
-        super(dirs, capacities, mode);
-    }
-
-
-    public boolean containsRelative(String file) {
+public class UnitedStorageExtension {
+    public boolean containsRelative(String file, String[] dirs) {
         return containsRelativeInternal(file, dirs) >= 0;
     }
-    public String randomDir() {
-        return randomDir(true, false);
+
+    public String maxDir(String[] dirs, int maxDir) {
+        return dirs[maxDir];
     }
-    public String maxDir() {
-        return this.dirs[maxDir];
-    }
-    public String randomDir(boolean balanced, boolean update) {
-        return this.dirs[randomDirInternal(balanced, update)];
-    }
+
     public static void createIfNotExists(String[] paths, Logger log) {
         for (String path : paths) {
             File file = new File(path);
@@ -90,6 +65,40 @@ public class UnitedStorageExtension extends UnitedStorage {
     }
     public static String at(int i, String[] dirs) {
         return dirs[i];
+    }
+    public static long[] updateStat(DecentralizationObj deo, int maxDir, long free, Object lock) {
+        long[] tmpFrees = null;
+
+        if (deo.mode == UnitedStorage.SelectMode.SYS_FREE) {
+            tmpFrees = new long[deo.frees.length];
+            for (int i = 0; i < deo.dirs.length; i++) {
+                File file = new File(deo.dirs[i]);
+                tmpFrees[i] = file.getFreeSpace();
+            }
+
+            synchronized (lock) {
+                free = 0;
+                for (int i = 0; i < deo.dirs.length; i++) {
+                    deo.frees[i] = tmpFrees[i];
+                    free += deo.frees[i];
+                }
+            }
+        } else {
+            synchronized (lock) {
+                tmpFrees = deo.frees.clone();
+            }
+        }
+
+        long max = 0;
+        int tmpMaxDir = 0;
+        for (int i = 0; i < deo.dirs.length; i++) {
+            if (tmpFrees[i] > max) {
+                max = tmpFrees[i];
+                tmpMaxDir = i;
+            }
+        }
+        maxDir = tmpMaxDir;
+        return new long[]{maxDir, free};
     }
 
 }
