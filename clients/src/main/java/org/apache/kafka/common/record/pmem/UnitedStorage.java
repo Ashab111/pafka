@@ -142,7 +142,7 @@ public class UnitedStorage {
 
 
     public void release(String path, long size) {
-        int idx = UnitedStorageExtension.containsAbsoluteInternal(path, dirs);
+        int idx = containsAbsoluteInternal(path, dirs);
         if (idx < 0) {
             log.error(path + " not in the storage: " + toString());
             return;
@@ -155,7 +155,7 @@ public class UnitedStorage {
         return this.capacity;
     }
     public boolean containsAbsolute(String file) {
-        return UnitedStorageExtension.containsAbsoluteInternal(file, dirs) >= 0;
+        return containsAbsoluteInternal(file, dirs) >= 0;
     }
     public String randomDir(boolean balanced, boolean update, String[] dirs) {
         return dirs[randomDirInternal(balanced, update)];
@@ -165,8 +165,8 @@ public class UnitedStorage {
             return rand.nextInt(this.dirs.length);
         } else {
             if (update) {
-                DecentralizationObj deo = new DecentralizationObj(mode, dirs, frees);
-                long[] toRet = UnitedStorageExtension.updateStat(deo, maxDir, free, lock);
+                DecentralizationObj deo = new DecentralizationObj(maxDir, dirs, frees);
+                long[] toRet = UnitedStorageExtension.updateStat(mode, deo, free, lock);
                 maxDir = (int) toRet[0];
                 free = toRet[1];
             }
@@ -236,7 +236,7 @@ public class UnitedStorage {
     }
 
     public void take(int idx, long size) {
-        if (mode != UnitedStorage.SelectMode.CONFIG_FREE && mode != UnitedStorage.SelectMode.MAX_FREE) {
+        if (mode != SelectMode.CONFIG_FREE && mode != SelectMode.MAX_FREE) {
             log.error("Use take() in mode " + mode);
         }
 
@@ -248,22 +248,22 @@ public class UnitedStorage {
         log.debug("After take: " + dirs[idx] + ": " + frees[idx] + "; " + free);
 
         if (idx == maxDir) {
-            DecentralizationObj deo = new DecentralizationObj(mode, dirs, frees);
-            long[] toRet = UnitedStorageExtension.updateStat(deo, maxDir, free, lock);
+            DecentralizationObj deo = new DecentralizationObj(maxDir, dirs, frees);
+            long[] toRet = UnitedStorageExtension.updateStat(mode, deo, free, lock);
             maxDir = (int) toRet[0];
             free = toRet[1];
         }
     }
 
-    void setMode(UnitedStorage.SelectMode mode) {
+    void setMode(SelectMode mode) {
         this.mode = mode;
-        DecentralizationObj deo = new DecentralizationObj(mode, dirs, frees);
-        long[] toRet = UnitedStorageExtension.updateStat(deo, maxDir, free, lock);
+        DecentralizationObj deo = new DecentralizationObj(maxDir, dirs, frees);
+        long[] toRet = UnitedStorageExtension.updateStat(mode, deo, free, lock);
         maxDir = (int) toRet[0];
         free = toRet[1];
     }
     public void release(int idx, long size) {
-        if (mode != UnitedStorage.SelectMode.CONFIG_FREE && mode != UnitedStorage.SelectMode.MAX_FREE) {
+        if (mode != SelectMode.CONFIG_FREE && mode != SelectMode.MAX_FREE) {
             log.error("Use release() in mode " + mode);
         }
 
@@ -273,8 +273,8 @@ public class UnitedStorage {
         }
 
         if (idx != maxDir) {
-            DecentralizationObj deo = new DecentralizationObj(mode, dirs, frees);
-            long[] toRet = UnitedStorageExtension.updateStat(deo, maxDir, free, lock);
+            DecentralizationObj deo = new DecentralizationObj(maxDir, dirs, frees);
+            long[] toRet = UnitedStorageExtension.updateStat(mode, deo, free, lock);
             maxDir = (int) toRet[0];
             free = toRet[1];
         }

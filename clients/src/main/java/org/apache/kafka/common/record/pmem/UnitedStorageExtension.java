@@ -66,10 +66,10 @@ public class UnitedStorageExtension {
     public static String at(int i, String[] dirs) {
         return dirs[i];
     }
-    public static long[] updateStat(DecentralizationObj deo, int maxDir, long free, Object lock) {
+    public static long[] updateStat(UnitedStorage.SelectMode mode, DecentralizationObj deo, long free, Object lock) {
         long[] tmpFrees = null;
 
-        if (deo.mode == UnitedStorage.SelectMode.SYS_FREE) {
+        if (mode == UnitedStorage.SelectMode.SYS_FREE) {
             tmpFrees = new long[deo.frees.length];
             for (int i = 0; i < deo.dirs.length; i++) {
                 File file = new File(deo.dirs[i]);
@@ -97,8 +97,8 @@ public class UnitedStorageExtension {
                 tmpMaxDir = i;
             }
         }
-        maxDir = tmpMaxDir;
-        return new long[]{maxDir, free};
+        deo.maxDir = tmpMaxDir;
+        return new long[]{deo.maxDir, free};
     }
 
 }

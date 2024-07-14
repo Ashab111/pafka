@@ -17,16 +17,11 @@
 package org.apache.kafka.common.record.pmem;
 
 public class DecentralizationObj {
-    UnitedStorage.SelectMode mode;
+
     String[] dirs;
     long[] frees;
-    public UnitedStorage.SelectMode getMode() {
-        return mode;
-    }
+    int maxDir;
 
-    public void setMode(UnitedStorage.SelectMode mode) {
-        this.mode = mode;
-    }
 
     public String[] getDirs() {
         return dirs;
@@ -44,8 +39,8 @@ public class DecentralizationObj {
         this.frees = frees;
     }
 
-    public DecentralizationObj(UnitedStorage.SelectMode mode, String[] dirs, long[] frees) {
-        this.mode = mode;
+    public DecentralizationObj(int maxDir, String[] dirs, long[] frees) {
+        this.maxDir = maxDir;
         this.dirs = dirs;
         this.frees = frees;
     }
