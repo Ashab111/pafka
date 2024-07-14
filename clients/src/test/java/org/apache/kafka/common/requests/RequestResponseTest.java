@@ -2829,7 +2829,7 @@ public class RequestResponseTest {
                         .setValues(asList(new DescribeClientQuotasResponseData.ValueData()
                             .setKey("request_percentage")
                             .setValue(1.0)))));
-        return new DescribeClientQuotasResponse(data);
+        return new DescribeClientQuotasResponse(data, (short) 0, null);
     }
 
     private AlterClientQuotasRequest createAlterClientQuotasRequest() {

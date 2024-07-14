@@ -117,7 +117,7 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode(error.error().code())
             .setErrorMessage(error.message())
-            .setEntries(null));
+            .setEntries(null), error.error().code(), error.message());
     }
 
     public static DescribeClientQuotasRequest parse(ByteBuffer buffer, short version) {

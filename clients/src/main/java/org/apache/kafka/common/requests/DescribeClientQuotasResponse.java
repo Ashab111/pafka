@@ -35,21 +35,29 @@ import java.util.Map;
 public class DescribeClientQuotasResponse extends AbstractResponse {
 
     private final DescribeClientQuotasResponseData data;
+    List<EntryData> entries;
+    short errorCode;
+    String errorMessage;
 
-    public DescribeClientQuotasResponse(DescribeClientQuotasResponseData data) {
+    int throttleTimeMs;
+    public DescribeClientQuotasResponse(DescribeClientQuotasResponseData data, short errorCode, String errorMessage) {
         super(ApiKeys.DESCRIBE_CLIENT_QUOTAS);
         this.data = data;
+        this.entries = data.entries();
+        this.errorCode = errorCode;
+        this.errorMessage = errorMessage;
+        this.throttleTimeMs = throttleTimeMs();
     }
 
     public void complete(KafkaFutureImpl<Map<ClientQuotaEntity, Map<String, Double>>> future) {
-        Errors error = Errors.forCode(data.errorCode());
+        Errors error = Errors.forCode(errorCode);
         if (error != Errors.NONE) {
-            future.completeExceptionally(error.exception(data.errorMessage()));
+            future.completeExceptionally(error.exception(errorMessage));
             return;
         }
 
-        Map<ClientQuotaEntity, Map<String, Double>> result = new HashMap<>(data.entries().size());
-        for (EntryData entries : data.entries()) {
+        Map<ClientQuotaEntity, Map<String, Double>> result = new HashMap<>(entries.size());
+        for (EntryData entries : entries) {
             Map<String, String> entity = new HashMap<>(entries.entity().size());
             for (EntityData entityData : entries.entity()) {
                 entity.put(entityData.entityType(), entityData.entityName());
@@ -67,7 +75,7 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
 
     @Override
     public int throttleTimeMs() {
-        return data.throttleTimeMs();
+        return throttleTimeMs;
     }
 
     @Override
@@ -77,11 +85,11 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return errorCounts(Errors.forCode(data.errorCode()));
+        return errorCounts(Errors.forCode(errorCode));
     }
 
     public static DescribeClientQuotasResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData(new ByteBufferAccessor(buffer), version));
+        return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData(new ByteBufferAccessor(buffer), version), (short) 0, null);
     }
 
     public static DescribeClientQuotasResponse fromQuotaEntities(Map<ClientQuotaEntity, Map<String, Double>> entities,
@@ -113,6 +121,6 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
             .setThrottleTimeMs(throttleTimeMs)
             .setErrorCode((short) 0)
             .setErrorMessage(null)
-            .setEntries(entries));
+            .setEntries(entries), (short) 0, null);
     }
 }
