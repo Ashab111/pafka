@@ -27,17 +27,16 @@ import static org.apache.kafka.common.record.pmem.UnitedStorageExtension.contain
 
 public class UnitedStorage {
     private static final Logger log = LoggerFactory.getLogger(UnitedStorage.class);
-    static final SelectMode DEFAULT_MODE = SelectMode.CAPACITY;
-
-    protected String[] dirs;
+    private static final SelectMode DEFAULT_MODE = SelectMode.CAPACITY;
+    private String[] dirs;
     private long[] frees;
     private long[] capacities;
-    public long free = 0;
+    private long free = 0;
     private long capacity = 0;
     private Object lock = new Object();
-    protected volatile int maxDir = 0;
+    private volatile int maxDir = 0;
     private SelectMode mode = DEFAULT_MODE;
-    Random rand = new Random();
+    private final Random rand = new Random();
 
 
     public UnitedStorage(String[] dirs) {
@@ -275,6 +274,7 @@ public class UnitedStorage {
             free = toRet[1];
         }
     }
-
-
+    public String[] getDirs() {
+        return dirs;
+    }
 }
