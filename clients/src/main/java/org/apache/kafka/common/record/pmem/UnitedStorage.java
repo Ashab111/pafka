@@ -17,12 +17,13 @@
 package org.apache.kafka.common.record.pmem;
 
 import java.io.File;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Random;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.common.record.pmem.UnitedStorageExtension.containsAbsoluteInternal;
 
 public class UnitedStorage {
     public enum SelectMode {
@@ -66,7 +67,7 @@ public class UnitedStorage {
 
     public UnitedStorage(String dirs, String caps, SelectMode mode) {
         String[] paths = dirs.split(",");
-        createIfNotExists(paths);
+        UnitedStorageExtension.createIfNotExists(paths, log);
         String[] capsStr = caps.split(",");
         long[] capsLong = new long[capsStr.length];
         for (int i = 0; i < capsLong.length; i++) {
@@ -108,7 +109,7 @@ public class UnitedStorage {
 
 
     public void init(String[] dirs, long[] caps, SelectMode mode) {
-        createIfNotExists(dirs);
+        UnitedStorageExtension.createIfNotExists(dirs, log);
         this.dirs = dirs;
 
         frees = new long[dirs.length];
@@ -131,7 +132,7 @@ public class UnitedStorage {
     }
 
     public void take(String path, long size) {
-        int idx = containsAbsoluteInternal(path);
+        int idx = containsAbsoluteInternal(path, dirs);
         if (idx < 0) {
             log.error(path + " not in the storage: " + toString());
             return;
@@ -141,7 +142,7 @@ public class UnitedStorage {
 
 
     public void release(String path, long size) {
-        int idx = containsAbsoluteInternal(path);
+        int idx = UnitedStorageExtension.containsAbsoluteInternal(path, dirs);
         if (idx < 0) {
             log.error(path + " not in the storage: " + toString());
             return;
@@ -150,44 +151,11 @@ public class UnitedStorage {
     }
 
 
-
-
-
-    public String at(int i) {
-        return this.dirs[i];
-    }
-
     public long capacity() {
         return this.capacity;
     }
-
-    public long free() {
-        return this.free;
-    }
-
     public boolean containsAbsolute(String file) {
-        return containsAbsoluteInternal(file) >= 0;
-    }
-
-    private int containsAbsoluteInternal(String file) {
-        for (int i = 0; i < this.dirs.length; i++) {
-            if (file.startsWith(this.dirs[i])) {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
-    protected int containsRelativeInternal(String file) {
-        for (int i = 0; i < this.dirs.length; i++) {
-            Path absPath = Paths.get(this.dirs[i], file);
-            if (absPath.toFile().exists()) {
-                return i;
-            }
-        }
-
-        return -1;
+        return UnitedStorageExtension.containsAbsoluteInternal(file, dirs) >= 0;
     }
     protected int randomDirInternal(boolean balanced, boolean update) {
         if (!balanced) {
@@ -235,7 +203,7 @@ public class UnitedStorage {
     }
 
     public String toAbsolute(String relativePath, long size) {
-        int idx = containsRelativeInternal(relativePath);
+        int idx = UnitedStorageExtension.containsRelativeInternal(relativePath, dirs);
         String dir = null;
         if (idx < 0) {
             idx = randomDirInternal(true, false);
@@ -309,16 +277,7 @@ public class UnitedStorage {
             updateStat();
         }
     }
-    public void createIfNotExists(String[] paths) {
-        for (String path : paths) {
-            File file = new File(path);
-            if (!file.exists()) {
-                if (!file.mkdirs()) {
-                    log.error("Create directory " + path + " failed");
-                }
-            }
-        }
-    }
+
     void setMode(UnitedStorage.SelectMode mode) {
         this.mode = mode;
         updateStat();

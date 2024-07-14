@@ -16,20 +16,13 @@
  */
 package org.apache.kafka.common.record.pmem;
 
+import org.slf4j.Logger;
+
+import java.io.File;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 public class UnitedStorageExtension extends UnitedStorage {
-
-    public UnitedStorageExtension(String[] dirs) {
-        super(dirs);
-    }
-
-    public UnitedStorageExtension(String[] dirs, SelectMode mode) {
-        super(dirs, mode);
-    }
-
-    public UnitedStorageExtension(String dirs) {
-        super(dirs);
-    }
-
     public UnitedStorageExtension(String dirs, SelectMode mode) {
         super(dirs, mode);
     }
@@ -52,7 +45,7 @@ public class UnitedStorageExtension extends UnitedStorage {
 
 
     public boolean containsRelative(String file) {
-        return containsRelativeInternal(file) >= 0;
+        return containsRelativeInternal(file, dirs) >= 0;
     }
     public String randomDir() {
         return randomDir(true, false);
@@ -62,6 +55,41 @@ public class UnitedStorageExtension extends UnitedStorage {
     }
     public String randomDir(boolean balanced, boolean update) {
         return this.dirs[randomDirInternal(balanced, update)];
+    }
+    public static void createIfNotExists(String[] paths, Logger log) {
+        for (String path : paths) {
+            File file = new File(path);
+            if (!file.exists()) {
+                if (!file.mkdirs()) {
+                    log.error("Create directory " + path + " failed");
+                }
+            }
+        }
+    }
+    public static int containsAbsoluteInternal(String file, String[] dirs) {
+        for (int i = 0; i < dirs.length; i++) {
+            if (file.startsWith(dirs[i])) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+    public static int containsRelativeInternal(String file, String[] dirs) {
+        for (int i = 0; i < dirs.length; i++) {
+            Path absPath = Paths.get(dirs[i], file);
+            if (absPath.toFile().exists()) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+    public static long free(long free) {
+        return free;
+    }
+    public static String at(int i, String[] dirs) {
+        return dirs[i];
     }
 
 }
