@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.common.record.pmem;
 
-import java.io.File;
-
 public class UnitedStorageExtension extends UnitedStorage {
+
     public UnitedStorageExtension(String[] dirs) {
         super(dirs);
     }
@@ -63,50 +62,6 @@ public class UnitedStorageExtension extends UnitedStorage {
     }
     public String randomDir(boolean balanced, boolean update) {
         return this.dirs[randomDirInternal(balanced, update)];
-    }
-    public void take(int idx, long size) {
-        if (mode != SelectMode.CONFIG_FREE && mode != SelectMode.MAX_FREE) {
-            log.error("Use take() in mode " + mode);
-        }
-
-        log.debug("Before take: " + dirs[idx] + ": " + frees[idx] + "; " + free);
-        synchronized (lock) {
-            frees[idx] -= size;
-            free -= size;
-        }
-        log.debug("After take: " + dirs[idx] + ": " + frees[idx] + "; " + free);
-
-        if (idx == maxDir) {
-            updateStat();
-        }
-    }
-    public void createIfNotExists(String[] paths) {
-        for (String path : paths) {
-            File file = new File(path);
-            if (!file.exists()) {
-                if (!file.mkdirs()) {
-                    log.error("Create directory " + path + " failed");
-                }
-            }
-        }
-    }
-    void setMode(SelectMode mode) {
-        this.mode = mode;
-        updateStat();
-    }
-    public void release(int idx, long size) {
-        if (mode != SelectMode.CONFIG_FREE && mode != SelectMode.MAX_FREE) {
-            log.error("Use release() in mode " + mode);
-        }
-
-        synchronized (lock) {
-            frees[idx] += size;
-            free += size;
-        }
-
-        if (idx != maxDir) {
-            updateStat();
-        }
     }
 
 }

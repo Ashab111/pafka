@@ -29,17 +29,17 @@ public class UnitedStorage {
         CAPACITY, SYS_FREE, CONFIG_FREE, MAX_FREE;
     };
 
-    protected static final Logger log = LoggerFactory.getLogger(UnitedStorage.class);
-    private static final SelectMode DEFAULT_MODE = SelectMode.CAPACITY;
+    private static final Logger log = LoggerFactory.getLogger(UnitedStorage.class);
+    static final SelectMode DEFAULT_MODE = SelectMode.CAPACITY;
 
     protected String[] dirs;
-    protected long[] frees;
+    private long[] frees;
     private long[] capacities;
-    protected long free = 0;
+    public long free = 0;
     private long capacity = 0;
-    protected Object lock = new Object();
+    private Object lock = new Object();
     protected volatile int maxDir = 0;
-    protected SelectMode mode = DEFAULT_MODE;
+    private SelectMode mode = DEFAULT_MODE;
     Random rand = new Random();
 
 
@@ -66,7 +66,7 @@ public class UnitedStorage {
 
     public UnitedStorage(String dirs, String caps, SelectMode mode) {
         String[] paths = dirs.split(",");
-        UnitedStorageExtension use = new UnitedStorageExtension(dirs, caps);
+        USDecentralization use = new USDecentralization(new String[]{dirs}, frees);
         use.createIfNotExists(paths);
         String[] capsStr = caps.split(",");
         long[] capsLong = new long[capsStr.length];
@@ -109,7 +109,7 @@ public class UnitedStorage {
 
 
     public void init(String[] dirs, long[] caps, SelectMode mode) {
-        UnitedStorageExtension use = new UnitedStorageExtension(dirs, capacities, mode);
+        USDecentralization use = new USDecentralization(dirs, frees);
         use.createIfNotExists(dirs);
         this.dirs = dirs;
 
@@ -138,7 +138,7 @@ public class UnitedStorage {
             log.error(path + " not in the storage: " + toString());
             return;
         }
-        UnitedStorageExtension use = new UnitedStorageExtension(dirs, capacities);
+        USDecentralization use = new USDecentralization(dirs, frees);
         use.take(idx, size);
     }
 
@@ -149,7 +149,7 @@ public class UnitedStorage {
             log.error(path + " not in the storage: " + toString());
             return;
         }
-        UnitedStorageExtension use = new UnitedStorageExtension(dirs, capacities);
+        USDecentralization use = new USDecentralization(dirs, frees);
         use.release(idx, size);
     }
 
@@ -246,7 +246,7 @@ public class UnitedStorage {
         }
         dir = this.dirs[idx];
         if (size > 0) {
-            UnitedStorageExtension use = new UnitedStorageExtension(dirs, capacities);
+            USDecentralization use = new USDecentralization(dirs, frees);
             use.take(idx, size);
         }
         return Paths.get(dir, relativePath).toString();
@@ -266,7 +266,7 @@ public class UnitedStorage {
         return buf.toString();
     }
 
-    protected void updateStat() {
+    public void updateStat() {
         long[] tmpFrees = null;
         if (mode == SelectMode.SYS_FREE) {
             tmpFrees = new long[frees.length];
