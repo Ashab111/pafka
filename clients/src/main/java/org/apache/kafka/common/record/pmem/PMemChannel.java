@@ -111,7 +111,7 @@ public class PMemChannel extends FileChannel {
         storage = new UnitedStorage(paths, sizes, SelectMode.MAX_FREE);
         pSizeG = storage.capacity();
 
-        String metaPath = UnitedStorageExtension.at(META_STORE_IDX, storage.getDirs()) + "/pool.meta";
+        String metaPath = UnitedStorageExtension.at(META_STORE_IDX, storage.dirs) + "/pool.meta";
         metaStore = new PMemMetaStore(metaPath, META_STORE_ESTIMATED_SIZE);
 
         preallocateIfNeeded(storage, pSizeG, blockSize, poolRatio);
