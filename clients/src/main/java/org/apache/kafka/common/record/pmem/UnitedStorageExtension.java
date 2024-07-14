@@ -66,10 +66,10 @@ public class UnitedStorageExtension {
     public static String at(int i, String[] dirs) {
         return dirs[i];
     }
-    public static long[] updateStat(UnitedStorage.SelectMode mode, DecentralizationObj deo, long free, Object lock) {
+    public static long[] updateStat(SelectMode mode, DecentralizationObj deo, long free, Object lock) {
         long[] tmpFrees = null;
 
-        if (mode == UnitedStorage.SelectMode.SYS_FREE) {
+        if (mode == SelectMode.SYS_FREE) {
             tmpFrees = new long[deo.frees.length];
             for (int i = 0; i < deo.dirs.length; i++) {
                 File file = new File(deo.dirs[i]);

@@ -26,10 +26,6 @@ import org.slf4j.LoggerFactory;
 import static org.apache.kafka.common.record.pmem.UnitedStorageExtension.containsAbsoluteInternal;
 
 public class UnitedStorage {
-    public enum SelectMode {
-        CAPACITY, SYS_FREE, CONFIG_FREE, MAX_FREE;
-    };
-
     private static final Logger log = LoggerFactory.getLogger(UnitedStorage.class);
     static final SelectMode DEFAULT_MODE = SelectMode.CAPACITY;
 

@@ -19,7 +19,6 @@ package org.apache.kafka.common.record.pmem;
 
 import com.intel.pmem.llpl.MemoryPool;
 
-import org.apache.kafka.common.record.pmem.UnitedStorage.SelectMode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
