@@ -29,17 +29,17 @@ public class UnitedStorage {
         CAPACITY, SYS_FREE, CONFIG_FREE, MAX_FREE;
     };
 
-    private static final Logger log = LoggerFactory.getLogger(UnitedStorage.class);
+    protected static final Logger log = LoggerFactory.getLogger(UnitedStorage.class);
     private static final SelectMode DEFAULT_MODE = SelectMode.CAPACITY;
-    
-    private String[] dirs;
-    private long[] frees;
+
+    protected String[] dirs;
+    protected long[] frees;
     private long[] capacities;
-    private long free = 0;
+    protected long free = 0;
     private long capacity = 0;
-    private Object lock = new Object();
-    private volatile int maxDir = 0;
-    private SelectMode mode = DEFAULT_MODE;
+    protected Object lock = new Object();
+    protected volatile int maxDir = 0;
+    protected SelectMode mode = DEFAULT_MODE;
     Random rand = new Random();
 
 
@@ -66,7 +66,8 @@ public class UnitedStorage {
 
     public UnitedStorage(String dirs, String caps, SelectMode mode) {
         String[] paths = dirs.split(",");
-        createIfNotExists(paths);
+        UnitedStorageExtension use = new UnitedStorageExtension(dirs, caps);
+        use.createIfNotExists(paths);
         String[] capsStr = caps.split(",");
         long[] capsLong = new long[capsStr.length];
         for (int i = 0; i < capsLong.length; i++) {
@@ -105,13 +106,11 @@ public class UnitedStorage {
         init(dirs, capacities, mode);
     }
 
-    void setMode(SelectMode mode) {
-        this.mode = mode;
-        updateStat();
-    }
+
 
     public void init(String[] dirs, long[] caps, SelectMode mode) {
-        createIfNotExists(dirs);
+        UnitedStorageExtension use = new UnitedStorageExtension(dirs, capacities, mode);
+        use.createIfNotExists(dirs);
         this.dirs = dirs;
 
         frees = new long[dirs.length];
@@ -130,8 +129,7 @@ public class UnitedStorage {
 
             log.info(dirs[i] + " has capacity of " + capacities[i]);
         }
-
-        setMode(mode);
+        use.setMode(mode);
     }
 
     public void take(String path, long size) {
@@ -140,25 +138,10 @@ public class UnitedStorage {
             log.error(path + " not in the storage: " + toString());
             return;
         }
-        take(idx, size);
+        UnitedStorageExtension use = new UnitedStorageExtension(dirs, capacities);
+        use.take(idx, size);
     }
 
-    private void take(int idx, long size) {
-        if (mode != SelectMode.CONFIG_FREE && mode != SelectMode.MAX_FREE) {
-            log.error("Use take() in mode " + mode);
-        }
-
-        log.debug("Before take: " + dirs[idx] + ": " + frees[idx] + "; " + free);
-        synchronized (lock) {
-            frees[idx] -= size;
-            free -= size;
-        }
-        log.debug("After take: " + dirs[idx] + ": " + frees[idx] + "; " + free);
-
-        if (idx == maxDir) {
-            updateStat();
-        }
-    }
 
     public void release(String path, long size) {
         int idx = containsAbsoluteInternal(path);
@@ -166,27 +149,13 @@ public class UnitedStorage {
             log.error(path + " not in the storage: " + toString());
             return;
         }
-        release(idx, size);
+        UnitedStorageExtension use = new UnitedStorageExtension(dirs, capacities);
+        use.release(idx, size);
     }
 
-    private void release(int idx, long size) {
-        if (mode != SelectMode.CONFIG_FREE && mode != SelectMode.MAX_FREE) {
-            log.error("Use release() in mode " + mode);
-        }
 
-        synchronized (lock) {
-            frees[idx] += size;
-            free += size;
-        }
 
-        if (idx != maxDir) {
-            updateStat();
-        }
-    }
 
-    public String maxDir() {
-        return this.dirs[maxDir];
-    }
 
     public String at(int i) {
         return this.dirs[i];
@@ -214,11 +183,7 @@ public class UnitedStorage {
         return -1;
     }
 
-    public boolean containsRelative(String file) {
-        return containsRelativeInternal(file) >= 0;
-    }
-
-    private int containsRelativeInternal(String file) {
+    protected int containsRelativeInternal(String file) {
         for (int i = 0; i < this.dirs.length; i++) {
             Path absPath = Paths.get(this.dirs[i], file);
             if (absPath.toFile().exists()) {
@@ -228,16 +193,7 @@ public class UnitedStorage {
 
         return -1;
     }
-
-    public String randomDir() {
-        return randomDir(true, false);
-    }
-
-    public String randomDir(boolean balanced, boolean update) {
-        return this.dirs[randomDirInternal(balanced, update)];
-    }
-
-    private int randomDirInternal(boolean balanced, boolean update) {
+    protected int randomDirInternal(boolean balanced, boolean update) {
         if (!balanced) {
             return rand.nextInt(this.dirs.length);
         } else {
@@ -290,7 +246,8 @@ public class UnitedStorage {
         }
         dir = this.dirs[idx];
         if (size > 0) {
-            take(idx, size);
+            UnitedStorageExtension use = new UnitedStorageExtension(dirs, capacities);
+            use.take(idx, size);
         }
         return Paths.get(dir, relativePath).toString();
     }
@@ -309,7 +266,7 @@ public class UnitedStorage {
         return buf.toString();
     }
 
-    private void updateStat() {
+    protected void updateStat() {
         long[] tmpFrees = null;
         if (mode == SelectMode.SYS_FREE) {
             tmpFrees = new long[frees.length];
@@ -342,15 +299,6 @@ public class UnitedStorage {
         maxDir = tmpMaxDir;
     }
 
-    private void createIfNotExists(String[] paths) {
-        for (String path : paths) {
-            File file = new File(path);
-            if (!file.exists()) {
-                if (!file.mkdirs()) {
-                    log.error("Create directory " + path + " failed");
-                }
-            }
-        }
-    }
+
     
 }

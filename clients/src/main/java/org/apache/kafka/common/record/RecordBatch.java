@@ -238,4 +238,5 @@ public interface RecordBatch extends Iterable<Record> {
      * @return Whether this is a batch containing control records
      */
     boolean isControlBatch();
+
 }

@@ -25,6 +25,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class RecordsUtil {
+    final static byte MAGIC_VALUE_V1 = 1;
+    final static byte MAGIC_VALUE_V2 = 2;
     /**
      * Down convert batches to the provided message format version. The first offset parameter is only relevant in the
      * conversion from uncompressed v2 or higher to v1 or lower. The reason is that uncompressed records in v0 and v1
@@ -47,7 +49,7 @@ public class RecordsUtil {
         long startNanos = time.nanoseconds();
 
         for (RecordBatch batch : batches) {
-            if (toMagic < RecordBatch.MAGIC_VALUE_V2) {
+            if (toMagic < MAGIC_VALUE_V2) {
                 if (batch.isControlBatch())
                     continue;
 
@@ -63,13 +65,13 @@ public class RecordsUtil {
                 List<Record> records = new ArrayList<>();
                 for (Record record : batch) {
                     // See the method javadoc for an explanation
-                    if (toMagic > RecordBatch.MAGIC_VALUE_V1 || batch.isCompressed() || record.offset() >= firstOffset)
+                    if (toMagic > MAGIC_VALUE_V1 || batch.isCompressed() || record.offset() >= firstOffset)
                         records.add(record);
                 }
                 if (records.isEmpty())
                     continue;
                 final long baseOffset;
-                if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 && toMagic >= RecordBatch.MAGIC_VALUE_V2)
+                if (batch.magic() >= MAGIC_VALUE_V2 && toMagic >= MAGIC_VALUE_V2)
                     baseOffset = batch.baseOffset();
                 else
                     baseOffset = records.get(0).offset();
