@@ -28,7 +28,7 @@ import static org.apache.kafka.common.record.pmem.UnitedStorageExtension.contain
 public class UnitedStorage {
     private static final Logger log = LoggerFactory.getLogger(UnitedStorage.class);
     private static final SelectMode DEFAULT_MODE = SelectMode.CAPACITY;
-    private String[] dirs;
+    String[] dirs;
     private long[] frees;
     private long[] capacities;
     private long free = 0;
@@ -273,8 +273,5 @@ public class UnitedStorage {
             maxDir = (int) toRet[0];
             free = toRet[1];
         }
-    }
-    public String[] getDirs() {
-        return dirs;
     }
 }
