@@ -66,8 +66,7 @@ public class UnitedStorage {
 
     public UnitedStorage(String dirs, String caps, SelectMode mode) {
         String[] paths = dirs.split(",");
-        USDecentralization use = new USDecentralization(new String[]{dirs}, frees);
-        use.createIfNotExists(paths);
+        createIfNotExists(paths);
         String[] capsStr = caps.split(",");
         long[] capsLong = new long[capsStr.length];
         for (int i = 0; i < capsLong.length; i++) {
@@ -109,8 +108,7 @@ public class UnitedStorage {
 
 
     public void init(String[] dirs, long[] caps, SelectMode mode) {
-        USDecentralization use = new USDecentralization(dirs, frees);
-        use.createIfNotExists(dirs);
+        createIfNotExists(dirs);
         this.dirs = dirs;
 
         frees = new long[dirs.length];
@@ -129,7 +127,7 @@ public class UnitedStorage {
 
             log.info(dirs[i] + " has capacity of " + capacities[i]);
         }
-        use.setMode(mode);
+        setMode(mode);
     }
 
     public void take(String path, long size) {
@@ -138,8 +136,7 @@ public class UnitedStorage {
             log.error(path + " not in the storage: " + toString());
             return;
         }
-        USDecentralization use = new USDecentralization(dirs, frees);
-        use.take(idx, size);
+        take(idx, size);
     }
 
 
@@ -149,8 +146,7 @@ public class UnitedStorage {
             log.error(path + " not in the storage: " + toString());
             return;
         }
-        USDecentralization use = new USDecentralization(dirs, frees);
-        use.release(idx, size);
+        release(idx, size);
     }
 
 
@@ -246,8 +242,7 @@ public class UnitedStorage {
         }
         dir = this.dirs[idx];
         if (size > 0) {
-            USDecentralization use = new USDecentralization(dirs, frees);
-            use.take(idx, size);
+            take(idx, size);
         }
         return Paths.get(dir, relativePath).toString();
     }
@@ -298,7 +293,50 @@ public class UnitedStorage {
         }
         maxDir = tmpMaxDir;
     }
+    public void take(int idx, long size) {
+        if (mode != UnitedStorage.SelectMode.CONFIG_FREE && mode != UnitedStorage.SelectMode.MAX_FREE) {
+            log.error("Use take() in mode " + mode);
+        }
+
+        log.debug("Before take: " + dirs[idx] + ": " + frees[idx] + "; " + free);
+        synchronized (lock) {
+            frees[idx] -= size;
+            free -= size;
+        }
+        log.debug("After take: " + dirs[idx] + ": " + frees[idx] + "; " + free);
+
+        if (idx == maxDir) {
+            updateStat();
+        }
+    }
+    public void createIfNotExists(String[] paths) {
+        for (String path : paths) {
+            File file = new File(path);
+            if (!file.exists()) {
+                if (!file.mkdirs()) {
+                    log.error("Create directory " + path + " failed");
+                }
+            }
+        }
+    }
+    void setMode(UnitedStorage.SelectMode mode) {
+        this.mode = mode;
+        updateStat();
+    }
+    public void release(int idx, long size) {
+        if (mode != UnitedStorage.SelectMode.CONFIG_FREE && mode != UnitedStorage.SelectMode.MAX_FREE) {
+            log.error("Use release() in mode " + mode);
+        }
+
+        synchronized (lock) {
+            frees[idx] += size;
+            free += size;
+        }
+
+        if (idx != maxDir) {
+            updateStat();
+        }
+    }
 
 
-    
 }
